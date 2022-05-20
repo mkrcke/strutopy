@@ -12,16 +12,23 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import OneHotEncoder
 import sklearn
 
-#load data
-data = pd.read_csv('data/poliblogs2008.csv')
+""" Useful functions """
 
-"""### Ingest corpus to create documents and vocab"""
+def softmax(x):
+    """Compute softmax values for each sets of scores in x."""
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum(axis=0)
 
-# load corpus
-documents = corpora.MmCorpus('data/corpus.mm')
-dictionary = corpora.Dictionary.load('data/dictionary')
+def softmax_weights(x, weight):
+    """Compute softmax values for each sets of scores in x."""
+    e_x = weight*np.exp(x - np.max(x))[:,None]
+    return e_x / e_x.sum(axis=0)
 
-vocab = dictionary.token2id
+def get_type(x):
+    """returns type of an object x"""
+    msg = f'type of {x}: {type(x)}'
+    return msg
+
 
 """ Initializing Global Model Parameters"""
 def init_stm(documents, settings): 
@@ -49,6 +56,7 @@ def init_stm(documents, settings):
     model = {'mu':mu, 'sigma':sigma, 'beta': beta, 'lambda': lambd, 'kappa':kappa_initialized}
     
     return(model)
+
 """ Initializing Topical Content Model Parameters"""
 def init_kappa(documents, K, V, A, interactions): 
     # read in documents and vocab
@@ -98,15 +106,6 @@ def init_kappa(documents, K, V, A, interactions):
 
     return(kappa['out'])
 
-def softmax(x):
-    """Compute softmax values for each sets of scores in x."""
-    e_x = np.exp(x - np.max(x))
-    return e_x / e_x.sum(axis=0)
-
-def softmax_weights(x, weight):
-    """Compute softmax values for each sets of scores in x."""
-    e_x = weight*np.exp(x - np.max(x))[:,None]
-    return e_x / e_x.sum(axis=0)
 """ Compute Likelihood Function """
 def lhood(eta, mu, siginv, doc_ct, Ndoc, eta_long, beta_tuple, phi, theta, neta):
     
@@ -118,6 +117,7 @@ def lhood(eta, mu, siginv, doc_ct, Ndoc, eta_long, beta_tuple, phi, theta, neta)
     out = part2 - part1
     
     return -out
+
 """ Define Gradient """
 def grad(eta, mu, siginv, doc_ct,  Ndoc, eta_long, beta_tuple, phi, theta, neta):
 
@@ -126,7 +126,8 @@ def grad(eta, mu, siginv, doc_ct,  Ndoc, eta_long, beta_tuple, phi, theta, neta)
     part2 = siginv@(eta-mu)
 
     return part2 - part1
-""" Optimize rameter Space """
+
+""" Optimize Parameter Space """
 def e_step(documents, mu, sigma, lambd, beta):
     #quickly define useful constants
     V = beta['beta'][0].shape[1] # ncol
@@ -150,12 +151,20 @@ def e_step(documents, mu, sigma, lambd, beta):
     # For right now we are just doing everything in serial.
     # the challenge with multicore is efficient scheduling while
     # maintaining a small dimension for the sufficient statistics.
-    
-    mu = mu.flatten()
+    ############
+    # input checks
+    # get mu from dict for second iteration  
+    if type(mu) == 'dict': 
+        mu = mu.get('mu')
+    else:
+        mu = mu.flatten()
     
     #set parameters for one document (i)
     for i in range(N):
 
+        #TO-DO: select i-th row of mu
+        # if mu_update: 
+        #   mu_i = mu[i]
         eta=lambd[i]
         neta = len(eta)
         eta_long = np.insert(eta,-1,0)
@@ -163,8 +172,6 @@ def e_step(documents, mu, sigma, lambd, beta):
         doc = documents[i]
         words = [x for x,y in doc]
         aspect = betaindex[i]
-        print(aspect)
-        print(beta['beta'].shape)
         #beta_i = beta['beta'][aspect][:,[words]] # replace with beta_ss[aspect][:,np.array(words)]
         beta_tuple = beta['beta'][aspect][:,np.array(words)]
 
@@ -189,22 +196,20 @@ def e_step(documents, mu, sigma, lambd, beta):
                           sigmaentropy=sigmaentropy,
                           theta=theta)
         
-        # update sufficient statistics        
+        #3) Update sufficient statistics        
         #print(f"Input:eta: {doc_results['eta'].get('nu').shape}\nphi:{doc_results['phi'].shape}")
         print(f"\nbound:{doc_results['bound']}")
         sigma_ss = sigma_ss + doc_results['eta'].get('nu')
 
-
-        #beta_ss[aspect][:,[words]] = beta_ss[aspect][:,[words]].reshape(K,beta_ss[aspect][:,[words]].shape[2]) 
-        
+        #beta_ss[aspect][:,[words]] = beta_ss[aspect][:,[words]].reshape(K,beta_ss[aspect][:,[words]].shape[2])         
         beta_ss[aspect][:,np.array(words)] = doc_results.get('phi') + np.take(beta_ss[aspect], words, 1)
         bound[i] = doc_results.get('bound')
         lambd[i] = doc_results['eta'].get('lambd')
-        
         #4) Combine and Return Sufficient Statistics
         results = {'sigma':sigma_ss, 'beta':beta_ss, 'bound': bound, 'lambd': lambd}
         
     return results
+
 """ Solve for Hessian/Phi/Bound returning the result"""
 def hpb(eta, doc_ct, mu, siginv, beta_tuple, sigmaentropy, theta):
     #print(f'Input for the Hessian Phi Bound\neta:{eta.shape}\ndoc_ct:{doc_ct.shape}\nmu:{mu.shape}\nsiginv:{siginv.shape}\nbeta_tuple:{beta_tuple.shape}\nsigmaentropy:{sigmaentropy.shape}\ntheta:{theta.shape}')
@@ -271,57 +276,35 @@ def makeTopMatrix(x, data=None):
     return(data.loc[:,x]) # add intercept! 
 
 def stm_control(documents, vocab, settings, model=None):
-    
     ##########
     #Step 1: Initialize Parameters
     ##########
-    
-    #ngroups = settings$ngroups
-    
+    #TO-DO: Optimize with ngroups
     if model == None:
         print('Call init_stm()')
         model = init_stm(documents, settings) #initialize
     else: 
         model = model
-        
     # unpack initialized model
-    
     mu = model['mu']
     sigma = model['sigma']
     lambd = model['lambda'] 
     beta = {'beta': model['beta'],
             'kappa': model['kappa']}
-    
     convergence = None
-    
     #discard the old object
     del model
-    
     betaindex = settings['covariates']['betaindex']
-    
     #Pull out some book keeping elements
     betaindex = settings['covariates']['betaindex']
-    
     ############
     #Step 2: Run EM
     ############
-    
     t1 = time.process_time()
-
-    #run the model (so far: one iteration)
-    #suffstats = [] 
-
-
+    suffstats = [] 
     stopits = False
-    
     while not stopits:
-        ############
-        # Input checks
-        # assert type(mu) == 'dict'
-        
-        print(type(mu), type(sigma), type(lambd), type(beta))
-        print(mu.shape, sigma.shape, lambd.shape)
-        
+
         ############
         # Run E-Step    
         suffstats = (e_step(documents, mu, sigma, lambd, beta))
@@ -375,32 +358,24 @@ def opt_mu(lambd, covar, enet, ic_k, maxits, mode = "L1"):
     covar2D = np.array(covar)[:,None] #prepares 1D array for one-hot encoding by making it 2D
     enc = OneHotEncoder(handle_unknown='ignore') #create OHE
     covarOHE = enc.fit_transform(covar2D).toarray() #fit OHE
-    
     # TO-DO: mode = CTM if there are no covariates 
     # TO-DO: mode = Pooled if there are covariates requires variational linear regression with Half-Cauchy hyperprior
-    
     # mode = L1 simplest method requires only glmnet (https://cran.r-project.org/web/packages/glmnet/index.html)
     if mode == "L1":
         model = sklearn.linear_model.Lasso(alpha=enet)
         fitted_model = model.fit(covarOHE,lambd)
     else: 
         raise ValueError('Updating the topical prevalence parameter requires a mode. Choose from "CTM", "Pooled" or "L1" (default).')
-
     gamma = np.insert(fitted_model.coef_, 0, fitted_model.intercept_).reshape(9,3)
     design_matrix = np.c_[ np.ones(covarOHE.shape[0]), covarOHE]
-    
     #compute mu
     mu = design_matrix@gamma.T   
-    print(mu.shape)
-    print(gamma.shape) 
-    
     return {
         'mu':mu,
         'gamma':gamma
         }
     
 def opt_sigma(nu, lambd, mu, sigprior):
-
     #find the covariance
     # if ncol(mu) == 1: 
     #     covariance = np.cross(sweep(lambd, 2, STATS=as.numeric(mu), FUN="-")
@@ -408,7 +383,7 @@ def opt_sigma(nu, lambd, mu, sigprior):
     covariance = (lambd - mu).T@(lambd-mu)
     sigma = (covariance + nu)/lambd.shape[1]
     sigma = np.diag(np.diag(sigma))*sigprior + (1-sigprior)*sigma
-    print(f'type of sigma: {type(sigma)}')
+    get_type(sigma)
     return sigma
 
 def opt_beta(beta_ss, kappa):
@@ -424,21 +399,18 @@ def opt_beta(beta_ss, kappa):
     #     out = mnreg(beta_ss, settings) 
     # else: 
     #     out = jeffreysKappa(beta_ss, kappa, settings)
-    print(type(beta))
+    get_type(beta)
     return beta
 
 def convergence_check(bound_ss, convergence, settings):
     verbose = settings['verbose']
     emtol = settings['convergence']['em.converge.thresh']
     maxits = settings['convergence']['max.em.its']
-
     # initialize the convergence object if empty
     if convergence is None: 
         convergence = {'bound':np.zeros(max_em_its), 'its':1, 'converged':False, 'stopits':False}
-
     # fill in the current bound
     convergence['bound'][convergence.get('its')]
-
     # if not first iteration
     if convergence['its']>1:
         old = convergence['bound'][convergence.get(its)-1] #assign bound from previous iteration
@@ -465,8 +437,18 @@ def convergence_check(bound_ss, convergence, settings):
 
 """ Create Example """
 
-""" Setting control variables"""
 
+
+
+""" Ingest data to create documents and vocab"""
+
+data = pd.read_csv('data/poliblogs2008.csv')
+# load preprocessed corpus
+documents = corpora.MmCorpus('data/corpus.mm')
+dictionary = corpora.Dictionary.load('data/dictionary')
+vocab = dictionary.token2id
+
+""" Setting control variables"""
 prevalence = 'rating'
 content = 'blog'
 num_topics = 10
@@ -542,4 +524,4 @@ settings = {
 
 
 
-# out = stm_control(documents, vocab, settings)
+stm_control(documents, vocab, settings)
