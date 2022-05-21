@@ -210,7 +210,7 @@ def e_step(documents, mu, sigma, lambd, beta):
         lambd[i] = doc_results['eta'].get('lambd')
         #4) Combine and Return Sufficient Statistics
         results = {'sigma':sigma_ss, 'beta':beta_ss, 'bound': bound, 'lambd': lambd}
-        
+
     return results
 
 """ Solve for Hessian/Phi/Bound returning the result"""
@@ -532,4 +532,4 @@ settings = {
 
 
 
-stm_control(documents, vocab, settings)
+out = stm_control(documents, vocab, settings)
