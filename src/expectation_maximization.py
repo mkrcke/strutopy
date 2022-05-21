@@ -154,24 +154,27 @@ def e_step(documents, mu, sigma, lambd, beta):
     ############
     # input checks
     # get mu from dict for second iteration  
-    if type(mu) == 'dict': 
+    if type(mu) is dict: 
         mu = mu.get('mu')
+        update_mu = True
+
     else:
-        mu = mu.flatten()
+        mu_i = mu.flatten()
+        update_mu = False
     
     #set parameters for one document (i)
     for i in range(N):
 
-        #TO-DO: select i-th row of mu
-        # if mu_update: 
-        #   mu_i = mu[i]
+        if update_mu: 
+            mu_i = mu[i]
+        
         eta=lambd[i]
         neta = len(eta)
         eta_long = np.insert(eta,-1,0)
 
         doc = documents[i]
         words = [x for x,y in doc]
-        aspect = betaindex[i]
+        aspect = betaindex.iloc[i]
         #beta_i = beta['beta'][aspect][:,[words]] # replace with beta_ss[aspect][:,np.array(words)]
         beta_tuple = beta['beta'][aspect][:,np.array(words)]
 
@@ -185,12 +188,12 @@ def e_step(documents, mu, sigma, lambd, beta):
         phi = softmax_weights(eta_long, beta_tuple)
         # optimize variational posterior
         result = optimize.fmin_bfgs(lhood,x0=eta,
-                           args=(mu, siginv, Ndoc, doc_ct, eta_long, beta_tuple, phi, theta, neta),
+                           args=(mu_i, siginv, Ndoc, doc_ct, eta_long, beta_tuple, phi, theta, neta),
                            fprime=grad)
         #solve hpb
         doc_results = hpb(eta=result,
                           doc_ct=doc_ct,
-                          mu=mu,
+                          mu=mu_i,
                           siginv=siginv,
                           beta_tuple=beta_tuple,
                           sigmaentropy=sigmaentropy,
@@ -441,11 +444,16 @@ def convergence_check(bound_ss, convergence, settings):
 
 
 """ Ingest data to create documents and vocab"""
-
+# raw documents
 data = pd.read_csv('data/poliblogs2008.csv')
+# selection for quick testing
+data = data[3000:4000]
 # load preprocessed corpus
+# 
 documents = corpora.MmCorpus('data/corpus.mm')
+# dictionary: 
 dictionary = corpora.Dictionary.load('data/dictionary')
+# vocabulary: 
 vocab = dictionary.token2id
 
 """ Setting control variables"""
