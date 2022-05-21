@@ -12,6 +12,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import OneHotEncoder
 import sklearn
 
+
 """ Useful functions """
 
 def softmax(x):
@@ -162,6 +163,7 @@ def e_step(documents, mu, sigma, lambd, beta):
         mu_i = mu.flatten()
         update_mu = False
     
+
     #set parameters for one document (i)
     for i in range(N):
 
@@ -170,7 +172,7 @@ def e_step(documents, mu, sigma, lambd, beta):
         
         eta=lambd[i]
         neta = len(eta)
-        eta_long = np.insert(eta,-1,0)
+        eta_long = np.insert(eta,len(eta),0)
 
         doc = documents[i]
         words = [x for x,y in doc]
@@ -202,11 +204,12 @@ def e_step(documents, mu, sigma, lambd, beta):
         #3) Update sufficient statistics        
         #print(f"Input:eta: {doc_results['eta'].get('nu').shape}\nphi:{doc_results['phi'].shape}")
         print(f"\nbound:{doc_results['bound']}")
+        print(f"\nresults:{doc_results}")
         sigma_ss = sigma_ss + doc_results['eta'].get('nu')
 
         #beta_ss[aspect][:,[words]] = beta_ss[aspect][:,[words]].reshape(K,beta_ss[aspect][:,[words]].shape[2])         
         beta_ss[aspect][:,np.array(words)] = doc_results.get('phi') + np.take(beta_ss[aspect], words, 1)
-        bound[i] = doc_results.get('bound')
+        bound[i] = doc_results['bound']
         lambd[i] = doc_results['eta'].get('lambd')
         #4) Combine and Return Sufficient Statistics
         results = {'sigma':sigma_ss, 'beta':beta_ss, 'bound': bound, 'lambd': lambd}
@@ -215,16 +218,16 @@ def e_step(documents, mu, sigma, lambd, beta):
 
 """ Solve for Hessian/Phi/Bound returning the result"""
 def hpb(eta, doc_ct, mu, siginv, beta_tuple, sigmaentropy, theta):
-    #print(f'Input for the Hessian Phi Bound\neta:{eta.shape}\ndoc_ct:{doc_ct.shape}\nmu:{mu.shape}\nsiginv:{siginv.shape}\nbeta_tuple:{beta_tuple.shape}\nsigmaentropy:{sigmaentropy.shape}\ntheta:{theta.shape}')
-    eta_long = np.insert(eta,-1,0)
+    eta_long = np.insert(eta,len(eta),0)
     # copy to mess with 
     beta_temp = beta_tuple
-    #column-wise multiplication of beta and expeta
+    #column-wise multiplication of beta and expeta (!) TO-DO: not eta_long! 
+    # expeta = np.exp(eta_long)
+    # beta_temp = beta_temp*expeta[:,None]
     beta_temp = beta_temp*eta_long[:,None]
     
     beta_temp = (np.sqrt(doc_ct)[:,None] / np.sum(beta_temp, axis=0)[:,None]) * beta_temp.T # with shape (VxK)
     hess = beta_temp.T@beta_temp-np.sum(doc_ct)*(theta*theta.T) # hessian with shape KxK
-    #print(f'hess.shape:{hess.shape}')
     #we don't need beta_temp any more so we turn it into phi 
     beta_temp = beta_temp.T * np.sqrt(doc_ct) # should equal phi ?! 
 
@@ -247,25 +250,14 @@ def hpb(eta, doc_ct, mu, siginv, beta_tuple, sigmaentropy, theta):
     np.fill_diagonal(hess, dvec)
     #that was sufficient to ensure positive definiteness so no we can do cholesky 
     nu = np.linalg.cholesky(hess)
-
     #compute 1/2 the determinant from the cholesky decomposition
     detTerm = -np.sum(np.log(nu.diagonal()))
-    #print(f'detTerm {detTerm}')
-
     #Finish constructing nu
     nu = np.linalg.inv(np.triu(nu))
     nu = nu@nu.T
     # precompute the difference since we use it twice
     diff = eta-mu
-    #print(f'diff (shape):{diff, diff.shape}')
     ############## generate the bound and make it a scalar ##################
-    #print('Compute the lower bound...')
-    #print(f'shape of theta[:,None]: {theta[None,:].shape}')
-    #print(f'shape of beta_temp: {beta_temp.shape}')
-    #print(f'shape of the first summand: {(np.log(theta[None:,]@beta_temp)[None:,]@doc_ct).shape}')
-    #print(f'first summand: {np.log(theta[None:,]@beta_temp)@doc_ct}')
-    #print(f'shape of the second summand: {(detTerm - .5*diff.T@siginv@diff).shape}')
-    #print(f'second summand: {detTerm - .5*diff.T@siginv@diff}')
     bound = np.log(theta[None:,]@beta_temp)@doc_ct + detTerm - .5*diff.T@siginv@diff - sigmaentropy 
     ###################### return values as dictionary ######################
     phi = beta_temp
@@ -306,18 +298,19 @@ def stm_control(documents, vocab, settings, model=None):
     t1 = time.process_time()
     suffstats = [] 
     stopits = False
-    while not stopits:
 
+    while not stopits:
+        
         ############
         # Run E-Step    
         suffstats = (e_step(documents, mu, sigma, lambd, beta))
-    
+        # Unpack results
         sigma_ss = suffstats.get('sigma')
         lambd = suffstats.get('lambd')
         beta_ss = suffstats.get('beta')
         bound_ss = suffstats.get('bound')
         print("Completed E-Step ({} seconds). \n".format(math.floor((time.process_time()-t1))))
-        
+
         ############
         # Run M-Step 
 
@@ -353,7 +346,7 @@ def stm_control(documents, vocab, settings, model=None):
     #Step 3: Construct Output
     ############
 
-    return {'lambd':lambd, 'beta_ss':beta_ss, 'sigma_ss':sigma_ss, 'bound_ss':bound_ss}
+    return {'lambd':lambd, 'beta_ss':beta, 'sigma_ss':sigma, 'bound_ss':bound}
 
 def opt_mu(lambd, covar, enet, ic_k, maxits, mode = "L1"):
     #prepare covariate matrix for modeling 
@@ -413,7 +406,7 @@ def convergence_check(bound_ss, convergence, settings):
     if convergence is None: 
         convergence = {'bound':np.zeros(max_em_its), 'its':1, 'converged':False, 'stopits':False}
     # fill in the current bound
-    convergence['bound'][convergence.get('its')]
+    convergence['bound'][convergence.get('its')] = np.sum(bound_ss)
     # if not first iteration
     if convergence['its']>1:
         old = convergence['bound'][convergence.get(its)-1] #assign bound from previous iteration
