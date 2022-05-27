@@ -19,10 +19,11 @@ class STM:
         self.eta = None
         self.eta_long = None
         self.siginv = None
-        self.doc_ct = None
-        self.beta_tuple = None
-        self.theta = None
-        self.neta = None
+        self.sigmaentropy = None
+        #self.doc_ct = None
+        #self.beta_doc = None
+        # self.theta = None
+        # self.neta = None
         self.settings=settings
 
 
@@ -102,18 +103,18 @@ class STM:
                         }
 
     """ Compute Likelihood Function """
-    def lhood(self, mu, eta, word_count, eta_long, beta_tuple, Ndoc, phi, theta, neta):
+    def lhood(self, mu, eta, word_count, eta_long, beta_doc, Ndoc, phi, theta, neta):
         #formula 
         #rewrite LSE to prevent overflow
-        part1 = np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_tuple)))-Ndoc*scipy.special.logsumexp(eta)
-        part2 = .5*(eta-mu)@siginv@(eta-mu)
+        part1 = np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
+        part2 = .5*(eta-mu)@self.siginv@(eta-mu)
         return - (part2 + part1)
         
     """ Define Gradient """
-    def grad(self):
+    def grad(self, mu, eta, word_count, eta_long, beta_doc, Ndoc, phi, theta, neta):
         #formula
-        part1 = np.delete(np.sum(self.phi * self.doc_ct,axis=1) - np.sum(self.doc_ct)*self.theta, self.neta)
-        part2 = self.siginv@(self.eta-self.mu)
+        part1 = np.delete(np.sum(phi * word_count,axis=1) - np.sum(word_count)*theta, neta)
+        part2 = self.siginv@(eta-mu)
         return part2 - part1
 
     """ Optimize Parameter Space """
@@ -130,13 +131,13 @@ class STM:
         while True:
             try: 
                 sigobj = np.linalg.cholesky(self.sigma) #initialization of sigma not positive definite
-                sigmaentropy = np.sum(np.log(np.diag(sigobj)))
-                siginv = np.linalg.inv(sigobj).T*np.linalg.inv(sigobj)
+                self.sigmaentropy = np.sum(np.log(np.diag(sigobj)))
+                self.siginv = np.linalg.inv(sigobj).T*np.linalg.inv(sigobj)
                 break
             except:
                 print("Cholesky Decomposition failed, because sigma is not positive definite!")
-                sigmaentropy = .5*np.linalg.slogdet(self.sigma)[1]
-                siginv = np.linalg.solve(self.sigma)           
+                self.sigmaentropy = .5*np.linalg.slogdet(self.sigma)[1]
+                self.siginv = np.linalg.solve(self.sigma)           
             
         # 3) Document Scheduling
         # For right now we are just doing everything in serial.
@@ -168,25 +169,22 @@ class STM:
             doc = documents[i]
             words = [x for x,y in doc]
             aspect = self.betaindex[i]
-            beta_tuple = self.beta[aspect][:,np.array(words)]
+            beta_doc = self.beta[aspect][:,np.array(words)]
 
             #set document specs
             word_count = np.array([y for x,y in doc]) #count of words in document
             Ndoc = np.sum(word_count)
             # initial values
             theta = softmax(eta_long)
-            phi = softmax_weights(eta_long, beta_tuple)
+            phi = softmax_weights(eta_long, beta_doc)
             # optimize variational posterior
-            result = optimize.fmin_bfgs(self.lhood, x0=eta, args=(mu_i, eta, word_count, eta_long, beta_tuple, Ndoc, phi, theta, neta),
+            result = optimize.fmin_bfgs(self.lhood, x0=eta, args=(mu_i, word_count, eta_long, beta_doc, Ndoc, phi, theta, neta),
                             fprime=self.grad)
             #solve hpb
             doc_results = self.hpb(eta=result,
-                            doc_ct=word_count,
+                            word_count=word_count,
                             mu=mu_i,
-                            siginv=siginv,
-                            beta_tuple=beta_tuple,
-                            sigmaentropy=sigmaentropy,
-                            theta=theta)
+                            beta_doc=beta_doc)
             
             print(f"\nbound:{doc_results['bound']}")
             print(f"\nresults:{doc_results}")
@@ -195,32 +193,36 @@ class STM:
             sigma_ss = sigma_ss + doc_results['eta'].get('nu')
             beta_ss[aspect][:,np.array(words)] = doc_results.get('phi') + np.take(beta_ss[aspect], words, 1)
             bound[i] = doc_results['bound']
-            lambd[i] = doc_results['eta'].get('lambd')
+            self.lambd[i] = doc_results['eta'].get('lambd')
 
         return sigma_ss, beta_ss, bound, lambd
 
 
     """ Solve for Hessian/Phi/Bound returning the result"""
-    def hpb(self, eta, doc_ct, mu, siginv, beta_tuple, sigmaentropy, theta):
+    def hpb(self, eta, word_count, mu, beta_doc):
         eta_long = np.insert(eta,len(eta),0)
         # copy to mess with 
-        beta_temp = beta_tuple
+        beta_temp = beta_doc
+        # initial values
+        theta = softmax(eta_long)
+        
         #column-wise multiplication of beta and expeta (!) TO-DO: not eta_long! 
         expeta = np.exp(eta_long)
         # beta_temp = beta_temp*expeta[:,None]
         beta_temp = beta_temp*expeta[:,None]
         
-        beta_temp = (np.sqrt(doc_ct)[:,None] / np.sum(beta_temp, axis=0)[:,None]) * beta_temp.T # with shape (VxK)
-        hess = beta_temp.T@beta_temp-np.sum(doc_ct)*(theta*theta.T) # hessian with shape KxK
+        beta_temp = (np.sqrt(word_count)[:,None] / np.sum(beta_temp, axis=0)[:,None]) * beta_temp.T # with shape (VxK)
+        hess = beta_temp.T@beta_temp-np.sum(word_count)*(theta*theta.T) # hessian with shape KxK
         #we don't need beta_temp any more so we turn it into phi 
-        beta_temp = beta_temp.T * np.sqrt(doc_ct) # should equal phi ?! 
+        #defined above in e-step: phi = softmax_weights(eta_long, beta_tuple)
+        beta_temp = beta_temp.T * np.sqrt(word_count) # should equal phi ?! 
 
-        np.fill_diagonal(hess, np.diag(hess)-np.sum(beta_temp, axis=1)-np.sum(doc_ct)*theta) #altered diagonal of h
+        np.fill_diagonal(hess, np.diag(hess)-np.sum(beta_temp, axis=1)-np.sum(word_count)*theta) #altered diagonal of h
         
         # drop last row and columns
         hess = np.delete(hess,eta.size,0)
         hess = np.delete(hess,eta.size,1)
-        hess = hess + siginv # at this point, the hessian is complete
+        hess = hess + self.siginv # at this point, the hessian is complete
 
         # Invert hessian via cholesky decomposition 
         #np.linalg.cholesky(hess)
@@ -243,7 +245,7 @@ class STM:
         # precompute the difference since we use it twice
         diff = eta-mu
         ############## generate the bound and make it a scalar ##################
-        bound = np.log(theta[None:,]@beta_temp)@doc_ct + detTerm - .5*diff.T@siginv@diff - sigmaentropy 
+        bound = np.log(theta[None:,]@beta_temp)@word_count + detTerm - .5*diff.T@self.siginv@diff - self.sigmaentropy 
         ###################### return values as dictionary ######################
         phi = beta_temp
         eta = {'lambd' : eta, 'nu':nu}

@@ -166,6 +166,6 @@ def stm_control(documents, settings, model=None):
     #Step 3: Construct Output
     ############
 
-    return {'lambd':lambd, 'beta_ss':beta, 'sigma_ss':sigma, 'bound_ss':bound}
+    return {'lambd':lambd, 'beta_ss':beta, 'sigma_ss':sigma, 'bound_ss':bound_ss}
 
 stm_control(documents, settings, model=None)
