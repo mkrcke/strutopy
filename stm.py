@@ -106,19 +106,19 @@ class STM:
     def lhood(self, mu, eta, word_count, eta_long, beta_doc, Ndoc, phi, theta, neta):
         """ Computes Likelihood """
         # precompute the difference since we use it twice
-        diff = eta-mu
+        diff = (eta-mu)
         #formula 
         #-.5*diff@self.siginv@diff+np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
-        #part1 = np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
-        #part2 = .5*(eta-mu)@self.siginv@(eta-mu)
-        return -.5*diff@self.siginv@diff+np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
+        part1 = np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
+        part2 = -.5*diff@self.siginv@diff
+        return part2 - part1
         
     def grad(self, mu, eta, word_count, eta_long, beta_doc, Ndoc, phi, theta, neta):
         """ Define Gradient """
         #formula
-        part1 = np.delete(np.sum(phi * word_count,axis=1) - np.sum(word_count)*theta, neta)
+        part1 = np.delete(np.sum(phi * word_count,axis=1) - Ndoc*theta, neta)
         part2 = self.siginv@(eta-mu)
-        return part2 - part1
+        return part1 - part2
 
     
     def e_step(self, documents):
@@ -187,10 +187,10 @@ class STM:
             phi_vk = softmax_weights(eta_long, beta_doc_kv)
             # optimize variational posterior
             # does not matter if we use optimize.minimize(method='BFGS') or optimize fmin_bfgs()
-            eta_opt = optimize.minimize(self.lhood, x0=eta, args=(mu_i, word_count_1v, eta_long, beta_doc_kv, Ndoc, phi_vk, theta_1k, neta),
+            opti = optimize.minimize(self.lhood, x0=eta, args=(mu_i, word_count_1v, eta_long, beta_doc_kv, Ndoc, phi_vk, theta_1k, neta),
                             jac=self.grad, method="BFGS")
             #solve hpb
-            doc_results = self.hpb(eta=eta_opt,
+            doc_results = self.hpb(eta=opti.x,
                             word_count=word_count_1v,
                             mu=mu_i,
                             beta_doc=beta_doc_kv)
