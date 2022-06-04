@@ -13,7 +13,7 @@ import sklearn
 
 class STM:
     """ Class for training STM."""
-    def __init__(self, settings, documents, dictionary, K = 100):
+    def __init__(self, settings, documents, dictionary, K = 10):
         self.Ndoc = None
         self.kappa_initialized = None
         self.eta = None
@@ -102,23 +102,31 @@ class STM:
                         #'kappasum':, why rolling sum?
                         }
 
-    """ Compute Likelihood Function """
+    
     def lhood(self, mu, eta, word_count, eta_long, beta_doc, Ndoc, phi, theta, neta):
+        """ Computes Likelihood """
+        # precompute the difference since we use it twice
+        diff = eta-mu
         #formula 
-        #rewrite LSE to prevent overflow
-        part1 = np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
-        part2 = .5*(eta-mu)@self.siginv@(eta-mu)
-        return - (part2 + part1)
+        #-.5*diff@self.siginv@diff+np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
+        #part1 = np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
+        #part2 = .5*(eta-mu)@self.siginv@(eta-mu)
+        return -.5*diff@self.siginv@diff+np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
         
-    """ Define Gradient """
     def grad(self, mu, eta, word_count, eta_long, beta_doc, Ndoc, phi, theta, neta):
+        """ Define Gradient """
         #formula
         part1 = np.delete(np.sum(phi * word_count,axis=1) - np.sum(word_count)*theta, neta)
         part2 = self.siginv@(eta-mu)
         return part2 - part1
 
-    """ Optimize Parameter Space """
+    
     def e_step(self, documents):
+        """ Optimize the following parameters: 
+        - theta: document-topic distributions
+        - beta: word-topic distribution
+        - sigma: topic covariance matrix
+        and returns the approximate evidence lower bound (ELBO)"""
 
         # 1) Initialize Sufficient Statistics 
         sigma_ss = np.zeros(((self.K-1),(self.K-1)))
@@ -136,8 +144,8 @@ class STM:
                 break
             except:
                 print("Cholesky Decomposition failed, because sigma is not positive definite!")
-                self.sigmaentropy = .5*np.linalg.slogdet(self.sigma)[1]
-                self.siginv = np.linalg.solve(self.sigma)           
+                self.sigmaentropy = .5*np.linalg.slogdet(self.sigma)[1] # part 2 of ELBO 
+                self.siginv = np.linalg.solve(self.sigma)           # part 3 of ELBO
             
         # 3) Document Scheduling
         # For right now we are just doing everything in serial.
@@ -166,36 +174,53 @@ class STM:
        
             eta_long = np.insert(eta,neta,0)
 
-            doc = documents[i]
-            words = [x for x,y in doc]
-            aspect = self.betaindex[i]
-            beta_doc = self.beta[aspect][:,np.array(words)]
-
             #set document specs
-            word_count = np.array([y for x,y in doc]) #count of words in document
-            Ndoc = np.sum(word_count)
+            doc = documents[i]
+            words_1v = self.get_words(doc)
+            aspect = self.get_aspect(i)
+            beta_doc_kv = self.get_beta(words_1v, aspect)
+
+            word_count_1v = np.array([y for x,y in doc]) #count of words in document
+            Ndoc = np.sum(word_count_1v)
             # initial values
-            theta = softmax(eta_long)
-            phi = softmax_weights(eta_long, beta_doc)
+            theta_1k = stable_softmax(eta_long)
+            phi_vk = softmax_weights(eta_long, beta_doc_kv)
             # optimize variational posterior
-            result = optimize.fmin_bfgs(self.lhood, x0=eta, args=(mu_i, word_count, eta_long, beta_doc, Ndoc, phi, theta, neta),
-                            fprime=self.grad)
+            # does not matter if we use optimize.minimize(method='BFGS') or optimize fmin_bfgs()
+            eta_opt = optimize.minimize(self.lhood, x0=eta, args=(mu_i, word_count_1v, eta_long, beta_doc_kv, Ndoc, phi_vk, theta_1k, neta),
+                            jac=self.grad, method="BFGS")
             #solve hpb
-            doc_results = self.hpb(eta=result,
-                            word_count=word_count,
+            doc_results = self.hpb(eta=eta_opt,
+                            word_count=word_count_1v,
                             mu=mu_i,
-                            beta_doc=beta_doc)
+                            beta_doc=beta_doc_kv)
             
             print(f"\nbound:{doc_results['bound']}")
-            print(f"\nresults:{doc_results}")
             
             #Update sufficient statistics        
             sigma_ss = sigma_ss + doc_results['eta'].get('nu')
-            beta_ss[aspect][:,np.array(words)] = doc_results.get('phi') + np.take(beta_ss[aspect], words, 1)
+            beta_ss[aspect][:,np.array(words_1v)] = doc_results.get('phi') + np.take(beta_ss[aspect], words_1v, 1)
             bound[i] = doc_results['bound']
             self.lambd[i] = doc_results['eta'].get('lambd')
 
         return sigma_ss, beta_ss, bound, lambd
+
+    def get_beta(self, words, aspect):
+        """ returns the topic-word distribution for a document with the respective topical content covariate (aspect)"""
+        beta_doc = self.beta[aspect][:,np.array(words)]
+        return beta_doc
+
+    def get_aspect(self, i):
+        """returns the topical content covariate for document with index i"""
+        aspect = self.betaindex[i]
+        return aspect
+
+    def get_words(self, doc):
+        """ 
+        returns the word indices for a given document
+        """
+        words = [x for x,y in doc]
+        return words
 
 
     """ Solve for Hessian/Phi/Bound returning the result"""
@@ -204,7 +229,7 @@ class STM:
         # copy to mess with 
         beta_temp = beta_doc
         # initial values
-        theta = softmax(eta_long)
+        theta = stable_softmax(eta_long)
         
         #column-wise multiplication of beta and expeta (!) TO-DO: not eta_long! 
         expeta = np.exp(eta_long)
@@ -225,17 +250,10 @@ class STM:
         hess = hess + self.siginv # at this point, the hessian is complete
 
         # Invert hessian via cholesky decomposition 
-        #np.linalg.cholesky(hess)
+        # np.linalg.cholesky(hess)
         # error -> not properly converged: make the matrix positive definite
-        
-        #def make_pd(): """Convert matrix X to be positive definite."""
-        dvec = hess.diagonal()
-        magnitudes = sum(abs(hess), 1) - abs(dvec)
-        # cholesky decomposition works only for symmetric and positive definite matrices
-        dvec = np.where(dvec < magnitudes, magnitudes, dvec)
-        # A Hermitian diagonally dominant matrix A with real non-negative diagonal entries is positive semidefinite. 
-        np.fill_diagonal(hess, dvec)
-        #that was sufficient to ensure positive definiteness so no we can do cholesky 
+        self.make_pd(hess)
+        #now we can do cholesky 
         nu = np.linalg.cholesky(hess)
         #compute 1/2 the determinant from the cholesky decomposition
         detTerm = -np.sum(np.log(nu.diagonal()))
@@ -253,6 +271,15 @@ class STM:
         result = {'phi':phi,'eta': eta,'bound': bound}
         
         return result
+
+    def make_pd(self, hess):
+        """Convert matrix X to be positive definite."""
+        dvec = hess.diagonal()
+        magnitudes = sum(abs(hess), 1) - abs(dvec)
+        # cholesky decomposition works only for symmetric and positive definite matrices
+        dvec = np.where(dvec < magnitudes, magnitudes, dvec)
+        # A Hermitian diagonally dominant matrix A with real non-negative diagonal entries is positive semidefinite. 
+        np.fill_diagonal(hess, dvec)
 
     def makeTopMatrix(self, x, data=None):
         return(data.loc[:,x]) # add intercept! 
@@ -340,15 +367,18 @@ class STM:
 
     """ Useful functions """
 
-def softmax(x):
+def stable_softmax(x):
     """Compute softmax values for each sets of scores in x."""
-    e_x = np.exp(x - np.max(x))
-    return e_x / e_x.sum(axis=0)
+    xshift = x-np.max(x)
+    exps = np.exp(xshift)
+    # assert sum(e_x/e_x.sum(axis=0)) == 1
+    return exps / np.sum(exps)
 
 def softmax_weights(x, weight):
-    """Compute softmax values for each sets of scores in x."""
-    e_x = weight*np.exp(x - np.max(x))[:,None]
-    return e_x / e_x.sum(axis=0)
+    """Compute softmax values for each sets of scores in x.""" 
+    xshift = x - np.max(x)
+    exps = weight*np.exp(xshift)[:,None]
+    return exps / np.sum(exps)
 
 def get_type(x):
         """returns type of an object x"""
