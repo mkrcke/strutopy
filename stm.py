@@ -255,12 +255,10 @@ class STM:
         # Invert hessian via cholesky decomposition 
         # np.linalg.cholesky(hess)
         # error -> not properly converged: make the matrix positive definite
+        #np.linalg.cholesky(a) requires the matrix a to be hermitian positive-definite
         self.make_pd(hess)
         #now we can do cholesky 
-        #np.linalg.cholesky(a) requires the matrix a to be hermitian positive-definite
-        #check if hermitian p.-d.
-        if np.all(np.linalg.eigvalsh(hess)>0):
-            nu = np.linalg.cholesky(hess)
+        nu = np.linalg.cholesky(hess)
         #compute 1/2 the determinant from the cholesky decomposition
         detTerm = -np.sum(np.log(nu.diagonal()))
         #Finish constructing nu
@@ -298,6 +296,7 @@ class STM:
         dvec = np.where(dvec < magnitudes, magnitudes, dvec)
         # A Hermitian diagonally dominant matrix A with real non-negative diagonal entries is positive semidefinite. 
         np.fill_diagonal(hess, dvec)
+        #check if hermitian p.-d.
         if not np.all(np.linalg.eigvalsh(hess)>0):
             raise ValueError('Hessian not positive definite!')
 
