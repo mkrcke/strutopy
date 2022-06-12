@@ -1,4 +1,4 @@
-from doctest import DONT_ACCEPT_TRUE_FOR_1
+from multiprocessing.sharedctypes import Value
 import numpy as np
 
 import numpy.random as random
@@ -143,7 +143,7 @@ class STM:
                 self.siginv = np.linalg.inv(sigobj).T*np.linalg.inv(sigobj)
                 break
             except:
-                print("Cholesky Decomposition failed, because sigma is not positive definite!")
+                print("Cholesky Decomposition failed, because Sigma is not positive definite!")
                 self.sigmaentropy = .5*np.linalg.slogdet(self.sigma)[1] # part 2 of ELBO 
                 self.siginv = np.linalg.solve(self.sigma)           # part 3 of ELBO
             
@@ -193,7 +193,7 @@ class STM:
             doc_results = self.hpb(eta=opti.x,
                             word_count=word_count_1v,
                             mu=mu_i,
-                            beta_doc=beta_doc_kv)
+                            beta_doc_kv=beta_doc_kv)
             
             print(f"\nbound:{doc_results['bound']}")
             
@@ -207,8 +207,8 @@ class STM:
 
     def get_beta(self, words, aspect):
         """ returns the topic-word distribution for a document with the respective topical content covariate (aspect)"""
-        beta_doc = self.beta[aspect][:,np.array(words)]
-        return beta_doc
+        beta_doc_kv = self.beta[aspect][:,np.array(words)]
+        return beta_doc_kv
 
     def get_aspect(self, i):
         """returns the topical content covariate for document with index i"""
@@ -224,29 +224,32 @@ class STM:
 
 
     """ Solve for Hessian/Phi/Bound returning the result"""
-    def hpb(self, eta, word_count, mu, beta_doc):
-        eta_long = np.insert(eta,len(eta),0)
+    def hpb(self, eta, word_count, mu, beta_doc_kv):
+        eta_long_K = np.insert(eta,len(eta),0)
         # copy to mess with 
-        beta_temp = beta_doc
         # initial values
-        theta = stable_softmax(eta_long)
+        theta = stable_softmax(eta_long_K) # 0 < theta < 1 ? 
+        if not np.all((theta > 0) & (theta < 1)): 
+            raise ValueError("values of theta not between 0 and 1")
+        expeta_K = np.exp(eta_long_K)
         
-        #column-wise multiplication of beta and expeta (!) TO-DO: not eta_long! 
-        expeta = np.exp(eta_long)
-        # beta_temp = beta_temp*expeta[:,None]
-        beta_temp = beta_temp*expeta[:,None]
+        #column-wise multiplication of beta and expeta 
+        beta_temp_kv = beta_doc_kv*expeta_K[:,None]
         
-        beta_temp = (np.sqrt(word_count)[:,None] / np.sum(beta_temp, axis=0)[:,None]) * beta_temp.T # with shape (VxK)
-        hess = beta_temp.T@beta_temp-np.sum(word_count)*(theta*theta.T) # hessian with shape KxK
+        beta_temp_kv_norm = np.divide(np.multiply(beta_temp_kv,np.sqrt(word_count)), np.sum(beta_temp_kv, axis=0))
+        hess = beta_temp_kv_norm@beta_temp_kv_norm.T-np.sum(word_count)*(theta*theta.T) # hessian with shape KxK
         #we don't need beta_temp any more so we turn it into phi 
         #defined above in e-step: phi = softmax_weights(eta_long, beta_tuple)
-        beta_temp = beta_temp.T * np.sqrt(word_count) # should equal phi ?! 
+        beta_temp_phi = np.multiply(beta_temp_kv_norm, np.sqrt(word_count)) # equals phi
 
-        np.fill_diagonal(hess, np.diag(hess)-np.sum(beta_temp, axis=1)-np.sum(word_count)*theta) #altered diagonal of h
-        
+
+        np.fill_diagonal(hess, np.diag(hess)-np.sum(beta_temp_phi, axis=1)-np.sum(word_count)*theta) #altered diagonal of h
+
         # drop last row and columns
         hess = np.delete(hess,eta.size,0)
         hess = np.delete(hess,eta.size,1)
+        # if not np.all((hess >= 0) & (hess < 1)): 
+        #     raise ValueError("values of hessian not between 0 and 1")
         hess = hess + self.siginv # at this point, the hessian is complete
 
         # Invert hessian via cholesky decomposition 
@@ -254,7 +257,10 @@ class STM:
         # error -> not properly converged: make the matrix positive definite
         self.make_pd(hess)
         #now we can do cholesky 
-        nu = np.linalg.cholesky(hess)
+        #np.linalg.cholesky(a) requires the matrix a to be hermitian positive-definite
+        #check if hermitian p.-d.
+        if np.all(np.linalg.eigvalsh(hess)>0):
+            nu = np.linalg.cholesky(hess)
         #compute 1/2 the determinant from the cholesky decomposition
         detTerm = -np.sum(np.log(nu.diagonal()))
         #Finish constructing nu
@@ -263,9 +269,9 @@ class STM:
         # precompute the difference since we use it twice
         diff = eta-mu
         ############## generate the bound and make it a scalar ##################
-        bound = np.log(theta[None:,]@beta_temp)@word_count + detTerm - .5*diff.T@self.siginv@diff - self.sigmaentropy 
+        bound = np.log(theta[None:,]@beta_temp_kv)@word_count + detTerm - .5*diff.T@self.siginv@diff - self.sigmaentropy 
         ###################### return values as dictionary ######################
-        phi = beta_temp
+        phi = beta_temp_kv
         eta = {'lambd' : eta, 'nu':nu}
         
         result = {'phi':phi,'eta': eta,'bound': bound}
@@ -273,13 +279,27 @@ class STM:
         return result
 
     def make_pd(self, hess):
-        """Convert matrix X to be positive definite."""
+        """
+        Convert matrix X to be positive definite.
+
+        The following are necessary (but not sufficient) conditions for a Hermitian matrix A 
+        (which by definition has real diagonal elements a_(ii)) to be positive definite.
+
+        1. a_(ii)>0 for all i,
+        2. a_(ii)+a_(jj)>2|R[a_(ij)]| for i!=j,
+        3. The element with largest modulus lies on the main diagonal,
+        4. det(A)>0.
+
+        Returns: ValueError if matrix is not positive definite
+           """
         dvec = hess.diagonal()
-        magnitudes = sum(abs(hess), 1) - abs(dvec)
+        magnitudes = np.sum(abs(hess), 1) - abs(dvec)
         # cholesky decomposition works only for symmetric and positive definite matrices
         dvec = np.where(dvec < magnitudes, magnitudes, dvec)
         # A Hermitian diagonally dominant matrix A with real non-negative diagonal entries is positive semidefinite. 
         np.fill_diagonal(hess, dvec)
+        if not np.all(np.linalg.eigvalsh(hess)>0):
+            raise ValueError('Hessian not positive definite!')
 
     def makeTopMatrix(self, x, data=None):
         return(data.loc[:,x]) # add intercept! 
