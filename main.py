@@ -3,7 +3,6 @@ import numpy as np
 from gensim import corpora
 import time
 import math
-
 from stm import STM
 
 ###main.py

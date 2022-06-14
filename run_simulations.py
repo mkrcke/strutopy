@@ -14,7 +14,7 @@ V=500
 num_topics = 3
 A = 2
 verbose = True
-interactions = True #settings.kappa
+interactions = False #settings.kappa
 
 # Initialization and Convergence Settings
 init_type = "Random" #settings.init

@@ -45,8 +45,11 @@ class STM:
 
     def init_beta(self):
         beta_init = random.gamma(.1,1, self.V*self.K).reshape(self.K,self.V)
-        beta_init_normalized = (beta_init / beta_init.sum(axis=1)[:,None])
-        self.beta = np.repeat(beta_init_normalized, self.A).reshape(self.A, self.K, self.V)
+        beta_init_normalized = (beta_init / np.sum(beta_init, axis=1)[:,None])
+        self.beta = np.repeat(beta_init_normalized[None,:], self.A, axis=0)
+        # test if probabilities sum to 1      
+        [np.testing.assert_almost_equal(sum_over_words, 1) for i in range(self.A) for sum_over_words in np.sum(self.beta[i], axis=1)]
+
 
     def init_mu(self):
         self.mu = np.array([0]*(self.K-1))[:,None]
@@ -178,21 +181,33 @@ class STM:
             words_1v = self.get_words(doc)
             aspect = self.get_aspect(i)
             beta_doc_kv = self.get_beta(words_1v, aspect)
-
+            np.testing.assert_array_less(np.sum(beta_doc_kv, axis=1), 1)
             word_count_1v = np.array([y for x,y in doc]) #count of words in document
             Ndoc = np.sum(word_count_1v)
             # initial values
             theta_1k = stable_softmax(eta_long)
+            np.testing.assert_equal(np.sum(theta_1k), 1)
             phi_vk = softmax_weights(eta_long, beta_doc_kv)
+            #np.testing.assert_equal(np.sum(phi_vk), 1)
+
+            
             # optimize variational posterior
             # does not matter if we use optimize.minimize(method='BFGS') or optimize fmin_bfgs()
             opti = optimize.minimize(self.lhood, x0=eta, args=(mu_i, word_count_1v, eta_long, beta_doc_kv, Ndoc, phi_vk, theta_1k, neta),
                             jac=self.grad, method="BFGS")
+            
+            # Compute Hessian, Phi and Lower Bound 
+            hess = self.compute_hessian(eta = opti.x, word_count=word_count_1v, beta_doc_kv=beta_doc_kv)
+            hess_inv = self.invert_hessian(hess)
+            nu = self.compute_nu(hess_inv)
+            bound = self.lower_bound(hess_inv, mu = mu_i, word_count=word_count_1v, beta_doc_kv=beta_doc_kv, eta=opti.x)
+
+
             #solve hpb
-            doc_results = self.hpb(eta=opti.x,
-                            word_count=word_count_1v,
-                            mu=mu_i,
-                            beta_doc_kv=beta_doc_kv)
+            # doc_results = self.hpb(eta=opti.x,
+            #                 word_count=word_count_1v,
+            #                 mu=mu_i,
+            #                 beta_doc_kv=beta_doc_kv)
             
             print(f"\nbound:{doc_results['bound']}")
             
@@ -220,6 +235,76 @@ class STM:
         """
         words = [x for x,y in doc]
         return words
+    
+    def compute_hessian(self, eta, word_count, beta_doc_kv): 
+        """
+        computes hessian matrix for the variational distribution 
+        first, off diagonal values are computed.
+        diagonal values are replaced afterward
+        in the end, hessian should be positive definite
+        """
+        # off diagonal entries
+        eta_long_K = np.insert(eta,len(eta),0)
+        theta = stable_softmax(eta_long_K)
+        if not np.all((theta > 0) & (theta < 1)): 
+            raise ValueError("values of theta not between 0 and 1")
+        expected_phi = softmax_weights(eta_long_K, beta_doc_kv)
+        # in comparison to C++ implementation: EB = np.multiply(np.sqrt(word_count), expected_phi)
+        p1_offdiag = np.multiply(np.sqrt(word_count), expected_phi)@np.multiply(np.sqrt(word_count), expected_phi).T
+        p2_offdiag = sum(word_count)*theta[:,None]@theta[None,:]
+
+        hess = p1_offdiag - p2_offdiag
+
+        # diagonal entries 
+        p1_diag = np.sum(np.multiply(np.multiply(np.sqrt(word_count), expected_phi), np.sqrt(word_count)), 1)
+        p2_diag = sum(word_count)*theta
+
+        #alter diagonal entries of the hessian
+        np.fill_diagonal(hess, np.diag(hess)-p1_diag-p2_diag) 
+        
+        hess_kminus1bykminus1 = hess[:-1,:-1]
+        
+        hess = hess_kminus1bykminus1 + self.siginv # at this point, the hessian is complete
+
+        
+        return hess
+
+    def invert_hessian(self, hess):
+        """
+        Invert hessian via cholesky decomposition 
+        error -> not properly converged: make the matrix positive definite
+        np.linalg.cholesky(a) requires the matrix a to be hermitian positive-definite
+        """
+        try:  
+            hess_inverse = np.linalg.cholesky(hess)
+        except:
+            # leverage diagonal dominance 
+            hess = self.make_pd(hess)
+            hess_inverse = np.linalg.cholesky(hess)
+        
+        return hess_inverse
+
+    def compute_nu(self, hess_inverse): 
+        """
+        constructing nu
+        """
+        nu = np.linalg.inv(np.triu(hess_inverse))
+        nu = nu@nu.T
+        return nu
+    
+    def lower_bound(self, hess_inverse, mu, word_count, beta_doc_kv, eta, theta): 
+        """
+        computes the elbo as a scalar
+        """
+        eta_long_K = np.insert(eta,len(eta),0)
+        theta = stable_softmax(eta_long_K)
+        #compute 1/2 the determinant from the cholesky decomposition
+        detTerm = -np.sum(np.log(hess_inverse.diagonal()))
+        diff = eta-mu
+        ############## generate the bound and make it a scalar ##################
+        beta_temp_kv = beta_doc_kv*expeta_K[:,None]
+        bound = np.log(theta[None:,]@beta_temp_kv)@word_count + detTerm - .5*diff.T@self.siginv@diff - self.sigmaentropy
+        return bound
 
 
     """ Solve for Hessian/Phi/Bound returning the result"""
@@ -249,7 +334,7 @@ class STM:
         hess = np.delete(hess,eta.size,1)
         # if not np.all((hess >= 0) & (hess < 1)): 
         #     raise ValueError("values of hessian not between 0 and 1")
-        hess = hess - self.siginv # at this point, the hessian is complete
+        hess = hess + self.siginv # at this point, the hessian is complete
 
         # Invert hessian via cholesky decomposition 
         # np.linalg.cholesky(hess)
