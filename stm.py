@@ -5,14 +5,14 @@ import math
 from scipy import optimize
 import scipy
 from sklearn.preprocessing import OneHotEncoder
-import sklearn
+import sklearn.linear_model
 
 """ Class definition"""
 
 
 class STM:
     """ Class for training STM."""
-    def __init__(self, settings, documents, dictionary, K = 10):
+    def __init__(self, settings, documents, dictionary):
         self.Ndoc = None
         self.kappa_initialized = None
         self.eta = None
@@ -29,7 +29,7 @@ class STM:
         self.documents = documents
         self.dictionary = dictionary
 
-        self.K = K
+        self.K = self.settings['dim']['K']
         self.V = len(self.dictionary)
         self.A = self.settings['dim']['A'] # TODO: when data changes ...
         self.N = len(self.documents)
@@ -249,7 +249,7 @@ class STM:
         hess = np.delete(hess,eta.size,1)
         # if not np.all((hess >= 0) & (hess < 1)): 
         #     raise ValueError("values of hessian not between 0 and 1")
-        hess = hess + self.siginv # at this point, the hessian is complete
+        hess = hess - self.siginv # at this point, the hessian is complete
 
         # Invert hessian via cholesky decomposition 
         # np.linalg.cholesky(hess)
@@ -304,7 +304,10 @@ class STM:
 
     def opt_mu(self, lambd, covar, enet, ic_k, maxits, mode = "L1"):
         #prepare covariate matrix for modeling 
-        covar = covar.astype('category')
+        try:
+            covar = covar.astype('category')
+        except:
+            pass
         covar2D = np.array(covar)[:,None] #prepares 1D array for one-hot encoding by making it 2D
         enc = OneHotEncoder(handle_unknown='ignore') #create OHE
         covarOHE = enc.fit_transform(covar2D).toarray() #fit OHE
@@ -312,8 +315,8 @@ class STM:
         # TO-DO: mode = Pooled if there are covariates requires variational linear regression with Half-Cauchy hyperprior
         # mode = L1 simplest method requires only glmnet (https://cran.r-project.org/web/packages/glmnet/index.html)
         if mode == "L1":
-            model = sklearn.linear_model.Lasso(alpha=enet)
-            fitted_model = model.fit(covarOHE,lambd)
+            linear_model = sklearn.linear_model.Lasso(alpha=enet)
+            fitted_model = linear_model.fit(covarOHE,lambd)
         else: 
             raise ValueError('Updating the topical prevalence parameter requires a mode. Choose from "CTM", "Pooled" or "L1" (default).')
         gamma = np.insert(fitted_model.coef_, 0, fitted_model.intercept_).reshape(9,3)
