@@ -1,34 +1,91 @@
-# This script contains the basic simulations for the STM package. 
+# This script contains the basic simulation functionalities
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-n_topics = 3
-n_doc = 100 
-n_words = 40 # To-Do: sampling number of words per document (Poisson distribution)
-ATE = .2
-t_1 = (-ATE,0,+ATE)
 
-# define concentration parameters
-alpha_0 = np.array([0.3,0.4,0.3])
-alpha_1 = np.add(alpha_0,t_1)
-concentration_parameter = np.repeat(0.05, n_topics)
-# sample parameters (beta, thetas)
-rng = np.random.default_rng(12345)
+class generate_docs:
+    """
+    Class to simulate documents for topic model evaluation. For simulation, LDAs data generating process described by Blei et al. (2003) is used:
 
-sample_beta = rng.dirichlet(concentration_parameter,n_words)
-sample_theta_0 = rng.dirichlet((alpha_0), int(.5*n_doc))
-sample_theta_1 = rng.dirichlet((alpha_1), int(.5*n_doc))
+    Input
+    ------------------------------------------------------------------------------------------------------------------ 
+    - number of topics: n_topics (dtype: int) - so far only n_topics=3 works
+    - number of documents to be generated: n_docs (dtype: int)
+    - number of words for each document: n_words (dtype: int)
+    - length of vocabulary: V (dtype: int)
+    - covariate effect on the topic proportions: ATE (dtype: float)
+    - concentration parameter for the Dirichlet distribution over topic proportions: alpha (dtype: numpy.array)
+        example: 'np.array([.3,.4,.3])'
+        needs to have the same dimension as n_topics
+    - topic-word-distribution: symmetric Dirichlet distribution beta with dimension KxV (global parameter)
+    - topic proportion: asymmetric Dirichlet distribution theta with dimension K (document-level parameter)
+    Returns
+    ------------------------------------------------------------------------------------------------------------------
+    List of tuples, where each tuple represents a document. Each document is represented by index-word pairs (tuples). 
+
+    Corpus-like document representation (BoW-representation)
+
+    Example: [((1,2)(5,1)(7,2)), ((3,1)(4,1)(9,2)), ((4,1)(6,1)(9,1))] 
+    """
+    def __init__(self, n_docs, n_words, V, ATE, alpha, n_topics=3):
+        
+
+        self.alpha = alpha
+        self.n_topics=n_topics
 
 
-# plt.barh(range(int(.5*n_doc)), sample_theta_1.transpose()[0])
-# plt.barh(range(int(.5*n_doc)), sample_theta_1.transpose()[1], left=sample_theta_1.transpose()[0], color='g')
-# plt.barh(range(int(.5*n_doc)), sample_theta_1.transpose()[2], left=sample_theta_1.transpose()[0]+sample_theta_1.transpose()[1], color='r')
-# plt.title("Topic Distribution per sample document")
-# plt.show()
+        
+        self.n_docs = n_docs
+        self.n_words = n_words
+        self.V = V
+        self.ATE = ATE
+        self.t_1 = (-ATE,0,+ATE)
 
-# sample words
-for doc in range(n_doc):
-    p = sample_theta_0@sample_beta.T
-    np.random.multinomial(40, p[doc], size = 1)
+        
+        # set seed
+        self.rng = np.random.default_rng(12345)
+        self.concentration_parameter = np.repeat(0.05, self.V)
+
+        # sample corpus parameters (beta with dimension (KxV), theta with dimension (1xK))
+        # beta is a global parameter, i.e. it does not change across documents -> sample beforehand
+        # theta is a document-level parameter, i.e. it does change across documents -> sample during each iteration
+        self.sample_beta = self.rng.dirichlet(size = self.n_topics, alpha= self.concentration_parameter)
+
+    def generate(self, n_docs):
+        # generate objects to fill
+        self.documents = []
+        self.true_theta = np.empty(n_docs, dtype = object)
+        alpha_0 = self.alpha
+        alpha_1 = np.add(alpha_0,self.t_1)
+        # generate document by drawing words from a multinomial with dirichlet priors  
+        for doc in range(n_docs):
+            # treatment assignment (first half of documents without treatment)
+            if doc < 50:
+                sample_theta_0 = self.rng.dirichlet((alpha_0))
+                # bookkeeping theta
+                self.true_theta[doc] = sample_theta_0
+                p = sample_theta_0@self.sample_beta
+            else: 
+                sample_theta_1 = self.rng.dirichlet((alpha_1))
+                # bookkeeping theta
+                self.true_theta[doc] = sample_theta_1
+                p = sample_theta_1@self.sample_beta
+            doc_words = np.random.multinomial(40, p, size = 1)
+            # mimic corpus structure
+            # going from np.array([1,0,0,1,0,2]) to  [(0,1),(3,1),(4,2)] for each document
+            self.documents.append(list(zip(doc_words[np.where(doc_words>0)], np.asarray(doc_words).nonzero()[1])))
+        return self.documents
     
+    # display topic proportions per document
+    def display_props(self):
+        # convert theta to array
+        true_theta = np.vstack(self.true_theta)
+        plt.barh(range(int(self.n_docs)), true_theta.transpose()[0], label='p(k=1)')
+        plt.barh(range(int(self.n_docs)), true_theta.transpose()[1], left=true_theta.transpose()[0], color='g', label='p(k=2)')
+        plt.barh(range(int(self.n_docs)), true_theta.transpose()[2], left=true_theta.transpose()[0]+true_theta.transpose()[1], color='r', label = 'p(k=3)')
+        plt.title(f"Topic Distribution for {self.n_docs} sample documents ({self.n_topics} topics)")
+        plt.legend()
+        plt.show()
+
+
