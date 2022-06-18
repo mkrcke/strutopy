@@ -125,9 +125,20 @@ class STM:
     
     def e_step(self, documents):
         """ Optimize the following parameters: 
-        - theta: document-topic distributions
-        - beta: word-topic distribution
-        - sigma: topic covariance matrix
+        Parameters: 
+        - documents: a collection of document in the required (BoW) format
+        - eta: a vector of length K-1 containing the initial starting value for eta
+        - mu: a vector of length K-1 containing the prevalence prior
+        - beta: a matrix containing the complete topic-word distribution for all content covariate levels
+        - sigma: a k-1 by k-1 matrix containing the covariance matrix prevalence (MVN) prior
+        - sigmainv: a K-1 by K-1 matrix containing the precision matrix of the MVN prior. 
+
+        Return: 
+        - phi: a K by V matrix containing the variational distribution for each token where V is the number of unique words in a the given document.
+               They are in the order of appearance in the document. For words repeated more than once the sum of the column is the number of times that token appeared. 
+        - lambda: A K-1 by 1 matrix containing the mean of the variational distribution for eta. This is actuallly just called eta in the output as it is also the point estimate. 
+        - nu: A K-1 by K-1 matrix containing the covariance matrix of the variational distribution for eta. This is also the inverse Hessian matrix 
+        - bound: The value of the document-level contribution to the global approximate evidence lower bound. 
         and returns the approximate evidence lower bound (ELBO)"""
 
         # 1) Initialize Sufficient Statistics 
@@ -221,6 +232,8 @@ class STM:
 
     def get_beta(self, words, aspect):
         """ returns the topic-word distribution for a document with the respective topical content covariate (aspect)"""
+        if not np.all((self.beta > 0)): 
+            raise ValueError("Some entries of beta are negative.")
         beta_doc_kv = self.beta[aspect][:,np.array(words)]
         return beta_doc_kv
 
@@ -266,7 +279,6 @@ class STM:
         
         hess = hess_kminus1bykminus1 + self.siginv # at this point, the hessian is complete
 
-        
         return hess
 
     def invert_hessian(self, hess):
