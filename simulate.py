@@ -63,14 +63,14 @@ class generate_docs:
             # treatment assignment (first half of documents without treatment)
             if doc < 50:
                 sample_theta_0 = self.rng.dirichlet((alpha_0))
+                p = sample_theta_0@self.sample_beta
                 # bookkeeping theta
                 self.true_theta[doc] = sample_theta_0
-                p = sample_theta_0@self.sample_beta
             else: 
                 sample_theta_1 = self.rng.dirichlet((alpha_1))
+                p = sample_theta_1@self.sample_beta
                 # bookkeeping theta
                 self.true_theta[doc] = sample_theta_1
-                p = sample_theta_1@self.sample_beta
             doc_words = np.random.multinomial(40, p, size = 1)
             # mimic corpus structure
             # going from np.array([1,0,0,1,0,2]) to  [(0,1),(3,1),(5,2)] for each document

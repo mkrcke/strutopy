@@ -12,7 +12,7 @@ from simulate import generate_docs
 
 # Parameter Settings
 V=500
-num_topics = 10
+num_topics = 3
 A = 2
 verbose = True
 interactions = False #settings.kappa
@@ -88,7 +88,7 @@ def basic_simulations(n_docs, n_words, V, ATE, alpha, display=True):
         generator.display_props()
     return documents
 
-documents = basic_simulations(n_docs=100, n_words=10000, V=500, ATE=.2, alpha=np.array([.3,.4,.3]), display=False)
+documents = basic_simulations(n_docs=100, n_words=40, V=500, ATE=.2, alpha=np.array([.3,.4,.3]), display=False)
 dictionary = np.arange(V)
 betaindex = np.concatenate([np.repeat(0,50), np.repeat(1,50)])
 # Set starting values and parameters
