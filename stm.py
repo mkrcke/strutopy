@@ -46,9 +46,14 @@ class STM:
     def init_beta(self):
         beta_init = random.gamma(.1,1, self.V*self.K).reshape(self.K,self.V)
         beta_init_normalized = (beta_init / np.sum(beta_init, axis=1)[:,None])
-        self.beta = np.repeat(beta_init_normalized[None,:], self.A, axis=0)
-        # test if probabilities sum to 1      
-        [np.testing.assert_almost_equal(sum_over_words, 1) for i in range(self.A) for sum_over_words in np.sum(self.beta[i], axis=1)]
+        if self.interactions: 
+            self.beta = np.repeat(beta_init_normalized[None,:], self.A, axis=0)
+            # test if probabilities sum to 1      
+            [np.testing.assert_almost_equal(sum_over_words, 1) for i in range(self.A) for sum_over_words in np.sum(self.beta[i], axis=1)]
+        else: 
+            self.beta = beta_init_normalized
+            [np.testing.assert_almost_equal(sum_over_words, 1) for i in range(self.A) for sum_over_words in np.sum(self.beta, axis=1)]
+            
 
 
     def init_mu(self):
@@ -60,7 +65,11 @@ class STM:
 
 
     def init_lambda(self):
-        self.lambd = np.zeros((self.N, (self.K-1)))
+        """
+        initialize lambda as a list to fill mean values for each document 
+        dimension: N by K-1
+        """
+        self.lambd = [np.zeros(self.K-1)]*self.N
            
 
     """ Initializing Topical Content Model Parameters"""
@@ -142,11 +151,13 @@ class STM:
         and returns the approximate evidence lower bound (ELBO)"""
 
         # 1) Initialize Sufficient Statistics 
+        # The sufficient statistic of a set of independent identically distributed data observations is simply the sum of individual sufficient statistics.
         sigma_ss = np.zeros(((self.K-1),(self.K-1)))
-        beta_ss_i = np.zeros((self.K,self.V))
-        beta_ss = np.repeat(beta_ss_i, self.A).reshape(self.A,self.K,self.V)
+        if self.interactions: 
+            beta_ss = np.repeat(np.zeros((self.K,self.V)), self.A).reshape(self.A,self.K,self.V)
+        else: 
+            beta_ss = np.zeros((self.K,self.V))
         bound = np.repeat(0,self.N)
-        lambd = np.repeat(0,self.N)
         
         # 2) Precalculate common components
         while True:
@@ -192,7 +203,7 @@ class STM:
             words_1v = self.get_words(doc)
             aspect = self.get_aspect(i)
             beta_doc_kv = self.get_beta(words_1v, aspect)
-            np.testing.assert_array_less(np.sum(beta_doc_kv, axis=1), 1)
+            #np.testing.assert_array_less(np.sum(beta_doc_kv, axis=1), 1)
             word_count_1v = np.array([y for x,y in doc]) #count of words in document
             Ndoc = np.sum(word_count_1v)
             # initial values
@@ -211,30 +222,36 @@ class STM:
             hess = self.compute_hessian(eta = opti.x, word_count=word_count_1v, beta_doc_kv=beta_doc_kv)
             hess_inv = self.invert_hessian(hess)
             nu = self.compute_nu(hess_inv)
-            bound = self.lower_bound(hess_inv, mu = mu_i, word_count=word_count_1v, beta_doc_kv=beta_doc_kv, eta=opti.x)
+            bound_d, phi = self.lower_bound(hess_inv, mu = mu_i, word_count=word_count_1v, beta_doc_kv=beta_doc_kv, eta=opti.x)
 
 
             #solve hpb
             # doc_results = self.hpb(eta=opti.x,
-            #                 word_count=word_count_1v,
-            #                 mu=mu_i,
-            #                 beta_doc_kv=beta_doc_kv)
+            #                  word_count=word_count_1v,
+            #                  mu=mu_i,
+            #                  beta_doc_kv=beta_doc_kv)
             
-            print(f"\nbound:{doc_results['bound']}")
+            print(f"\nbound:{bound_d}")
             
             #Update sufficient statistics        
-            sigma_ss = sigma_ss + doc_results['eta'].get('nu')
-            beta_ss[aspect][:,np.array(words_1v)] = doc_results.get('phi') + np.take(beta_ss[aspect], words_1v, 1)
-            bound[i] = doc_results['bound']
-            self.lambd[i] = doc_results['eta'].get('lambd')
+            sigma_ss = sigma_ss + nu
+            if self.interactions: 
+                beta_ss[aspect][:,np.array(words_1v)] = phi + np.take(beta_ss[aspect], words_1v, 1)
+            else: 
+                beta_ss[:,np.array(words_1v)] = phi + np.take(beta_ss, words_1v, 1)
+            np.insert(bound, i, bound_d)
+            self.lambd[i] = opti.x
 
-        return sigma_ss, beta_ss, bound, lambd
+        return sigma_ss, beta_ss, bound, nu
 
     def get_beta(self, words, aspect):
         """ returns the topic-word distribution for a document with the respective topical content covariate (aspect)"""
-        if not np.all((self.beta > 0)): 
+        if not np.all((self.beta >= 0)): 
             raise ValueError("Some entries of beta are negative.")
-        beta_doc_kv = self.beta[aspect][:,np.array(words)]
+        if self.interactions: 
+            beta_doc_kv = self.beta[aspect][:,np.array(words)]
+        else: 
+            beta_doc_kv = self.beta[:,np.array(words)]
         return beta_doc_kv
 
     def get_aspect(self, i):
@@ -263,23 +280,27 @@ class STM:
             raise ValueError("values of theta not between 0 and 1")
         expected_phi = softmax_weights(eta_long_K, beta_doc_kv)
         # in comparison to C++ implementation: EB = np.multiply(np.sqrt(word_count), expected_phi)
-        p1_offdiag = np.multiply(np.sqrt(word_count), expected_phi)@np.multiply(np.sqrt(word_count), expected_phi).T
+        # EB * EB.t() - sum(doc_cts) * (theta * theta.t());
+        p1_offdiag = (np.sqrt(word_count)*expected_phi)@(np.sqrt(word_count)*expected_phi).T
+        # c.f. (theta * theta.t()); in the C++ implementation
+        # gives a K by K matrix 
         p2_offdiag = sum(word_count)*theta[:,None]@theta[None,:]
 
-        hess = p1_offdiag - p2_offdiag
+        #should be positive
+        neg_hess = p1_offdiag - p2_offdiag
 
-        # diagonal entries 
+        # diagonal entries
         p1_diag = np.sum(np.multiply(np.multiply(np.sqrt(word_count), expected_phi), np.sqrt(word_count)), 1)
         p2_diag = sum(word_count)*theta
 
         #alter diagonal entries of the hessian
-        np.fill_diagonal(hess, np.diag(hess)-p1_diag-p2_diag) 
+        np.fill_diagonal(neg_hess, np.diag(neg_hess)-p1_diag + p2_diag) 
         
-        hess_kminus1bykminus1 = hess[:-1,:-1]
+        hess_kminus1bykminus1 = neg_hess[:-1,:-1]
         
-        hess = hess_kminus1bykminus1 + self.siginv # at this point, the hessian is complete
+        neg_hess = hess_kminus1bykminus1 + self.siginv # at this point, the hessian is complete
 
-        return hess
+        return neg_hess
 
     def invert_hessian(self, hess):
         """
@@ -290,11 +311,56 @@ class STM:
         try:  
             hess_inverse = np.linalg.cholesky(hess)
         except:
-            # leverage diagonal dominance 
-            hess = self.make_pd(hess)
-            hess_inverse = np.linalg.cholesky(hess)
+            #hess = self.validate_positive_definitive(hess)
+            hess_inverse = np.linalg.cholesky(hess + 1e-12 * np.eye(hess.shape[0]))
         
         return hess_inverse
+
+    def to_positive_definitive(self, M):
+        M = np.matrix(M)
+        M = (M + M.T) * 0.5
+        k = 1
+        I = np.eye(M.shape[0])
+        w, v = np.linalg.eig(M)
+        min_eig = v.min()
+        M += (-min_eig * k * k + np.spacing(min_eig)) * I
+        return M
+
+    def validate_positive_definitive(self, M):   
+        try:
+            np.linalg.cholesky(M)
+        except np.linalg.LinAlgError:
+            M = self.to_positive_definitive(M)
+        #Print the eigenvalues of the Matrix
+        print(np.linalg.eigvalsh(M))
+        return M
+    
+    def make_pd(self, M):
+        """
+        Convert matrix X to be positive definite.
+
+        The following are necessary (but not sufficient) conditions for a Hermitian matrix A 
+        (which by definition has real diagonal elements a_(ii)) to be positive definite.
+
+        1. a_(ii)>0 for all i,
+        2. a_(ii)+a_(jj)>2|R[a_(ij)]| for i!=j,
+        3. The element with largest modulus lies on the main diagonal,
+        4. det(A)>0.
+
+        Returns: ValueError if matrix is not positive definite
+           """
+        dvec = M.diagonal()
+        magnitudes = np.sum(abs(M), 1) - abs(dvec)
+        # cholesky decomposition works only for symmetric and positive definite matrices
+        dvec = np.where(dvec < magnitudes, magnitudes, dvec)
+        # A Hermitian diagonally dominant matrix A with real non-negative diagonal entries is positive semidefinite. 
+        np.fill_diagonal(M, dvec)
+        #check if hermitian p.-d.
+        #Print the eigenvalues of the Matrix
+        print(np.linalg.eigvalsh(M))
+        if not np.all(np.linalg.eigvals(M)>0):
+            raise ValueError('The input matrix must be positive semidefinite')
+        return M
 
     def compute_nu(self, hess_inverse): 
         """
@@ -304,11 +370,13 @@ class STM:
         nu = nu@nu.T
         return nu
     
-    def lower_bound(self, hess_inverse, mu, word_count, beta_doc_kv, eta, theta): 
+    def lower_bound(self, hess_inverse, mu, word_count, beta_doc_kv, eta):
+
         """
         computes the elbo as a scalar
         """
         eta_long_K = np.insert(eta,len(eta),0)
+        expeta_K = np.exp(eta_long_K)
         theta = stable_softmax(eta_long_K)
         #compute 1/2 the determinant from the cholesky decomposition
         detTerm = -np.sum(np.log(hess_inverse.diagonal()))
@@ -316,7 +384,8 @@ class STM:
         ############## generate the bound and make it a scalar ##################
         beta_temp_kv = beta_doc_kv*expeta_K[:,None]
         bound = np.log(theta[None:,]@beta_temp_kv)@word_count + detTerm - .5*diff.T@self.siginv@diff - self.sigmaentropy
-        return bound
+        phi = beta_temp_kv
+        return bound, phi
 
 
     """ Solve for Hessian/Phi/Bound returning the result"""
@@ -372,40 +441,16 @@ class STM:
         
         return result
 
-    def make_pd(self, hess):
-        """
-        Convert matrix X to be positive definite.
-
-        The following are necessary (but not sufficient) conditions for a Hermitian matrix A 
-        (which by definition has real diagonal elements a_(ii)) to be positive definite.
-
-        1. a_(ii)>0 for all i,
-        2. a_(ii)+a_(jj)>2|R[a_(ij)]| for i!=j,
-        3. The element with largest modulus lies on the main diagonal,
-        4. det(A)>0.
-
-        Returns: ValueError if matrix is not positive definite
-           """
-        dvec = hess.diagonal()
-        magnitudes = np.sum(abs(hess), 1) - abs(dvec)
-        # cholesky decomposition works only for symmetric and positive definite matrices
-        dvec = np.where(dvec < magnitudes, magnitudes, dvec)
-        # A Hermitian diagonally dominant matrix A with real non-negative diagonal entries is positive semidefinite. 
-        np.fill_diagonal(hess, dvec)
-        #check if hermitian p.-d.
-        if not np.all(np.linalg.eigvalsh(hess)>0):
-            raise ValueError('Hessian not positive definite!')
-
     def makeTopMatrix(self, x, data=None):
         return(data.loc[:,x]) # add intercept! 
 
-    def opt_mu(self, lambd, covar, enet, ic_k, maxits, mode = "L1"):
+    def opt_mu(self, covar, enet, ic_k, maxits, mode = "L1"):
         #prepare covariate matrix for modeling 
         try:
             covar = covar.astype('category')
         except:
             pass
-        covar2D = np.array(covar)[:,None] #prepares 1D array for one-hot encoding by making it 2D
+        covar2D = np.array(covar)[:,None] #prepares 1D array for one-hot encoding (OHE) by making it 2D
         enc = OneHotEncoder(handle_unknown='ignore') #create OHE
         covarOHE = enc.fit_transform(covar2D).toarray() #fit OHE
         # TO-DO: mode = CTM if there are no covariates 
@@ -413,25 +458,22 @@ class STM:
         # mode = L1 simplest method requires only glmnet (https://cran.r-project.org/web/packages/glmnet/index.html)
         if mode == "L1":
             linear_model = sklearn.linear_model.Lasso(alpha=enet)
-            fitted_model = linear_model.fit(covarOHE,lambd)
+            fitted_model = linear_model.fit(covarOHE,self.lambd)
         else: 
             raise ValueError('Updating the topical prevalence parameter requires a mode. Choose from "CTM", "Pooled" or "L1" (default).')
-        gamma = np.insert(fitted_model.coef_, 0, fitted_model.intercept_).reshape(9,3)
+        gamma = np.insert(fitted_model.coef_, 0, fitted_model.intercept_).reshape(self.K-1,3)
         design_matrix = np.c_[ np.ones(covarOHE.shape[0]), covarOHE]
         #compute mu
         mu = design_matrix@gamma.T   
-        return {
-            'mu':mu,
-            'gamma':gamma
-            }
+        return mu
         
-    def opt_sigma(self, nu, lambd, mu, sigprior):
+    def opt_sigma(self, nu, mu, sigprior):
         #find the covariance
         # if ncol(mu) == 1: 
         #     covariance = np.cross(sweep(lambd, 2, STATS=as.numeric(mu), FUN="-")
         # else: 
-        covariance = (lambd - mu).T@(lambd-mu)
-        sigma = (covariance + nu)/lambd.shape[1]
+        covariance = (self.lambd - mu).T@(self.lambd-mu)
+        sigma = (covariance + nu)/self.lambd[0].shape[0]
         get_type(sigma)
         self.sigma = np.diag(np.diag(sigma))*sigprior + (1-sigprior)*sigma
 
@@ -439,7 +481,7 @@ class STM:
         #if its standard lda just row normalize
         if kappa is None: 
             norm_beta = beta_ss[[1]]/np.sum(beta_ss[[1]]) 
-            beta = {'beta': norm_beta}
+            self.beta = norm_beta
             #list(beta=list(beta_ss[[1]]/np.sum(beta_ss[[1]])))
         else: 
             print(f"implementation for {kappa} is missing")
@@ -448,8 +490,7 @@ class STM:
         #     out = mnreg(beta_ss, settings) 
         # else: 
         #     out = jeffreysKappa(beta_ss, kappa, settings)
-        get_type(beta)
-        self.beta = beta
+        get_type(self.beta)
 
     def convergence_check(self, bound_ss, convergence, settings):
         verbose = settings['verbose']
@@ -457,7 +498,7 @@ class STM:
         maxits = settings['convergence']['max.em.its']
         # initialize the convergence object if empty
         if convergence is None: 
-            convergence = {'bound':np.zeros(max_em_its), 'its':1, 'converged':False, 'stopits':False}
+            convergence = {'bound':np.zeros(maxits), 'its':1, 'converged':False, 'stopits':False}
         # fill in the current bound
         convergence['bound'][convergence.get('its')] = np.sum(bound_ss)
         # if not first iteration

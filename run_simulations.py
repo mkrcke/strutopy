@@ -1,3 +1,4 @@
+from code import interact
 from stm import STM
 import numpy as np
 import pandas as pd
@@ -11,7 +12,7 @@ from simulate import generate_docs
 
 # Parameter Settings
 V=500
-num_topics = 3
+num_topics = 10
 A = 2
 verbose = True
 interactions = False #settings.kappa
@@ -24,21 +25,24 @@ emtol = 1e-5 #settings.convergence
 sigma_prior=0 #settings.sigma.prior
 
 def stm_control(documents, settings, model=None):
+    np.random.seed(123)
     ##########
     #Step 1: Initialize Parameters
-    model = STM(settings, documents, dictionary)
+    if model is None:
+        model = STM(settings, documents, dictionary)
 
     ############
     #Step 2: Run EM
     ############
     t1 = time.process_time()
     stopits = False
+    convergence = None
 
     while not stopits:
         
         ############
         # Run E-Step    
-        sigma_ss, lambd, beta_ss, bound_ss = model.e_step(documents)
+        sigma_ss, beta_ss, bound_ss, nu = model.e_step(documents)
 
         print("Completed E-Step ({} seconds). \n".format(math.floor((time.process_time()-t1))))
 
@@ -48,7 +52,6 @@ def stm_control(documents, settings, model=None):
         t1 = time.process_time()
         
         mu = model.opt_mu(
-            lambd,
             covar=settings['covariates']['X'],
             enet=settings['gamma']['enet'],
             ic_k=settings['gamma']['ic.k'],
@@ -56,14 +59,13 @@ def stm_control(documents, settings, model=None):
             mode = settings['gamma']['mode']
         )
 
-        sigma = model.opt_sigma(
-            nu = sigma_ss,
-            lambd = lambd, 
-            mu = mu['mu'], 
+        model.opt_sigma(
+            nu = nu, 
+            mu = mu, 
             sigprior = settings['sigma']['prior']
         )
         
-        beta = model.opt_beta(
+        model.opt_beta(
             beta_ss, 
             kappa = None,
             #settings
@@ -77,7 +79,7 @@ def stm_control(documents, settings, model=None):
     #Step 3: Construct Output
     ############
 
-    return {'lambd':lambd, 'beta_ss':beta, 'sigma_ss':sigma, 'bound_ss':bound_ss}
+    return 
 
 def basic_simulations(n_docs, n_words, V, ATE, alpha, display=True):
     generator = generate_docs(n_docs, n_words, V, ATE, alpha)
@@ -86,7 +88,7 @@ def basic_simulations(n_docs, n_words, V, ATE, alpha, display=True):
         generator.display_props()
     return documents
 
-documents = basic_simulations(n_docs=100, n_words=40, V=500, ATE=.2, alpha=np.array([.3,.4,.3]), display=False)
+documents = basic_simulations(n_docs=100, n_words=10000, V=500, ATE=.2, alpha=np.array([.3,.4,.3]), display=False)
 dictionary = np.arange(V)
 betaindex = np.concatenate([np.repeat(0,50), np.repeat(1,50)])
 # Set starting values and parameters
@@ -99,7 +101,7 @@ settings = {
     },
     'verbose':verbose,
     'kappa':{
-        'interactions':True,
+        'interactions':interactions,
         'fixedintercept': True,
         'contrats': False,
         'mstep': {'tol':0.01, 'maxit':5}},

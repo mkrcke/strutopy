@@ -99,6 +99,7 @@ settings = {
 
 
 def stm_control(documents, settings, model=None):
+    np.random.seed(12345)
     ##########
     #Step 1: Initialize Parameters
     model = STM(settings, documents, dictionary)
@@ -120,6 +121,7 @@ def stm_control(documents, settings, model=None):
     t1 = time.process_time()
     suffstats = [] 
     stopits = False
+    convergence = None
 
     while not stopits:
         

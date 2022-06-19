@@ -73,8 +73,8 @@ class generate_docs:
                 p = sample_theta_1@self.sample_beta
             doc_words = np.random.multinomial(40, p, size = 1)
             # mimic corpus structure
-            # going from np.array([1,0,0,1,0,2]) to  [(0,1),(3,1),(4,2)] for each document
-            self.documents.append(list(zip(doc_words[np.where(doc_words>0)], np.asarray(doc_words).nonzero()[1])))
+            # going from np.array([1,0,0,1,0,2]) to  [(0,1),(3,1),(5,2)] for each document
+            self.documents.append(list(zip(np.asarray(doc_words).nonzero()[1], doc_words[np.where(doc_words>0)])))
         return self.documents
     
     # display topic proportions per document
