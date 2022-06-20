@@ -52,7 +52,7 @@ class generate_docs:
         # theta is a document-level parameter, i.e. it does change across documents -> sample during each iteration
         self.sample_beta = self.rng.dirichlet(size = self.n_topics, alpha= self.concentration_parameter)
 
-    def generate(self, n_docs):
+    def generate(self, n_docs, remove_terms=True):
         # generate objects to fill
         self.documents = []
         self.true_theta = np.empty(n_docs, dtype = object)
@@ -75,7 +75,26 @@ class generate_docs:
             # mimic corpus structure
             # going from np.array([1,0,0,1,0,2]) to  [(0,1),(3,1),(5,2)] for each document
             self.documents.append(list(zip(np.asarray(doc_words).nonzero()[1], doc_words[np.where(doc_words>0)])))
-        return self.documents
+        if remove_terms:
+            self.remove_infrequent_terms()
+        vocabulary = self.V
+        return self.documents, vocabulary
+
+    def remove_infrequent_terms(self):
+        """
+        returns documents reduced by all infrequent terms
+        """
+        wcountvec = np.concatenate([np.repeat(x[0], x[1]) for sublist in self.documents for x in sublist])
+        wcounts =  np.sort(np.unique(wcountvec))
+        print(f'removes {self.V-len(wcounts)} words due to no occurence')
+        # create new indices using a mapping
+        map_idx = list(zip(np.arange(len(wcounts)), wcounts))
+        for i in range(len(self.documents)): 
+            old_idx = [tuple[0] for tuple in self.documents[i]] 
+            values = [tuple[1] for tuple in self.documents[i]]
+            new_idx = [tuple[0] for tuple in map_idx if tuple[1] in old_idx]
+            self.documents[i] = list(zip(new_idx, values))
+        self.V = len(wcounts)
     
     # display topic proportions per document
     def display_props(self):

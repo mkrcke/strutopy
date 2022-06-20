@@ -7,6 +7,7 @@ import scipy
 from sklearn.preprocessing import OneHotEncoder
 import sklearn.linear_model
 
+
 """ Class definition"""
 
 
@@ -19,18 +20,13 @@ class STM:
         self.eta_long = None
         self.siginv = None
         self.sigmaentropy = None
-        #self.doc_ct = None
-        #self.beta_doc = None
-        # self.theta = None
-        # self.neta = None
         self.settings=settings
 
 
         self.documents = documents
         self.dictionary = dictionary
-
+        self.V = self.settings['dim']['V']
         self.K = self.settings['dim']['K']
-        self.V = len(self.dictionary)
         self.A = self.settings['dim']['A'] # TODO: when data changes ...
         self.N = len(self.documents)
         self.interactions = settings['kappa']['interactions']
