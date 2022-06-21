@@ -1,16 +1,13 @@
-from code import interact
-from stm import STM
 import numpy as np
-import pandas as pd
-from gensim import corpora
+import matplotlib.pyplot as plt
 import time
 import math
-
+import json
 # custom packages
 from stm import STM
 from simulate import generate_docs
 
-# Parameter Settings
+# Parameter Settings (required for simulation process)
 V=500
 num_topics = 10
 A = 2
@@ -20,7 +17,7 @@ interactions = False #settings.kappa
 # Initialization and Convergence Settings
 init_type = "Random" #settings.init
 ngroups = 1 #settings.ngroups
-max_em_its = 5 #settings.convergence
+max_em_its = 40 #settings.convergence
 emtol = 1e-5 #settings.convergence
 sigma_prior=0 #settings.sigma.prior
 
@@ -34,16 +31,14 @@ def stm_control(documents, settings, model=None):
     ############
     #Step 2: Run EM
     ############
-    t1 = time.process_time()
+    global_time = time.process_time()
     stopits = False
     convergence = None
-    iterator = 0
     while not stopits:
-        
+        t1 = time.process_time()
         ############
         # Run E-Step    
         sigma_ss, beta_ss, bound_ss, nu = model.e_step(documents)
-        iterator += 1
         print("Completed E-Step ({} seconds). \n".format(math.floor((time.process_time()-t1))))
 
         ############
@@ -59,13 +54,13 @@ def stm_control(documents, settings, model=None):
             mode = settings['gamma']['mode']
         )
 
-        model.opt_sigma(
+        sigma = model.opt_sigma(
             nu = nu, 
             mu = mu, 
             sigprior = settings['sigma']['prior']
         )
         
-        model.opt_beta(
+        beta = model.opt_beta(
             beta_ss, 
             kappa = None,
             #settings
@@ -78,6 +73,9 @@ def stm_control(documents, settings, model=None):
     ############
     #Step 3: Construct Output
     ############
+    time_processed = time.process_time()-global_time
+    model = {'mu':mu, 'sigma':sigma, 'beta':beta, 'convergence':convergence, 'settings': settings, 'time_processed':time_processed}
+    json.dump(model, open("stm_model.json", "w"), cls=NumpyEncoder)
 
     return 
 
@@ -91,12 +89,18 @@ def basic_simulations(n_docs, n_words, V, ATE, alpha, display=True):
 # Here we are simulating 100 documents with 40 words each. We are sampling from a multinomial distribution with dimension V.
 # Note however that we will discard all elements from the vector V that do not occur.
 # This leads to a dimension of the vocabulary << V
+np.random.seed(123)
 documents, vocabulary = basic_simulations(n_docs=100, n_words=40, V=500, ATE=.2, alpha=np.array([.3,.4,.3]), display=False)
 betaindex = np.concatenate([np.repeat(0,50), np.repeat(1,50)])
 num_topics = 3
 dictionary=np.arange(vocabulary)
 
-
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
+        
 # Set starting values and parameters
 settings = {
     'dim':{
@@ -148,7 +152,8 @@ settings = {
         'ngroups':ngroups,},
 }
 
+stm_control(documents, settings, model=None)
 
 
 
-results = stm_control(documents, settings, model=None)
+
