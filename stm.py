@@ -472,6 +472,7 @@ class STM:
         sigma = (covariance + nu)/self.lambd[0].shape[0]
         get_type(sigma)
         self.sigma = np.diag(np.diag(sigma))*sigprior + (1-sigprior)*sigma
+        return self.sigma
 
     def opt_beta(self, beta_ss, kappa):
         # computes the update for beta based on the SAGE model 
@@ -486,6 +487,7 @@ class STM:
         # else: 
         #     out = jeffreysKappa(beta_ss, kappa, settings)
         get_type(self.beta)
+        return self.beta
 
     def convergence_check(self, bound_ss, convergence, settings):
         verbose = settings['verbose']
