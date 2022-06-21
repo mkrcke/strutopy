@@ -182,7 +182,7 @@ class STM:
             mu_i = self.mu.flatten()
             update_mu = False
         
-
+        self.iterator = 0
         #set parameters for one document (i)
         for i in range(self.N):
 
@@ -191,7 +191,6 @@ class STM:
             
             eta = self.lambd[i]
             neta = len(eta)
-       
             eta_long = np.insert(eta,neta,0)
 
             #set document specs
@@ -204,7 +203,7 @@ class STM:
             Ndoc = np.sum(word_count_1v)
             # initial values
             theta_1k = stable_softmax(eta_long)
-            np.testing.assert_equal(np.sum(theta_1k), 1)
+            #np.testing.assert_equal(np.sum(theta_1k), 1)
             phi_vk = softmax_weights(eta_long, beta_doc_kv)
             #np.testing.assert_equal(np.sum(phi_vk), 1)
 
@@ -215,8 +214,9 @@ class STM:
                             jac=self.grad, method="BFGS")
             
             # Compute Hessian, Phi and Lower Bound 
-            hess = self.compute_hessian(eta = opti.x, word_count=word_count_1v, beta_doc_kv=beta_doc_kv)
-            hess_inv = self.invert_hessian(hess)
+            hess_inv = opti.hess_inv
+            #hess = self.compute_hessian(eta = opti.x, word_count=word_count_1v, beta_doc_kv=beta_doc_kv)
+            #hess_inv = self.invert_hessian(hess)
             nu = self.compute_nu(hess_inv)
             bound_d, phi = self.lower_bound(hess_inv, mu = mu_i, word_count=word_count_1v, beta_doc_kv=beta_doc_kv, eta=opti.x)
 
@@ -228,14 +228,14 @@ class STM:
             #                  beta_doc_kv=beta_doc_kv)
             
             print(f"\nbound:{bound_d}")
-            
+            self.iterator += 1
             #Update sufficient statistics        
             sigma_ss = sigma_ss + nu
             if self.interactions: 
                 beta_ss[aspect][:,np.array(words_1v)] = phi + np.take(beta_ss[aspect], words_1v, 1)
             else: 
                 beta_ss[:,np.array(words_1v)] = phi + np.take(beta_ss, words_1v, 1)
-            np.insert(bound, i, bound_d)
+            bound = np.insert(bound, i, np.float(bound_d))
             self.lambd[i] = opti.x
 
         return sigma_ss, beta_ss, bound, nu
@@ -474,11 +474,10 @@ class STM:
         self.sigma = np.diag(np.diag(sigma))*sigprior + (1-sigprior)*sigma
 
     def opt_beta(self, beta_ss, kappa):
-        #if its standard lda just row normalize
+        # computes the update for beta based on the SAGE model 
+        # for now: just computes row normalized beta values
         if kappa is None: 
-            norm_beta = beta_ss[[1]]/np.sum(beta_ss[[1]]) 
-            self.beta = norm_beta
-            #list(beta=list(beta_ss[[1]]/np.sum(beta_ss[[1]])))
+            self.beta = beta_ss/np.sum(beta_ss) 
         else: 
             print(f"implementation for {kappa} is missing")
         #if its a SAGE model (Eisenstein et al., 2013) use the distributed poissons
@@ -494,13 +493,13 @@ class STM:
         maxits = settings['convergence']['max.em.its']
         # initialize the convergence object if empty
         if convergence is None: 
-            convergence = {'bound':np.zeros(maxits), 'its':1, 'converged':False, 'stopits':False}
+            convergence = {'bound':np.zeros(maxits), 'its':0, 'converged':False, 'stopits':False}
         # fill in the current bound
         convergence['bound'][convergence.get('its')] = np.sum(bound_ss)
         # if not first iteration
-        if convergence['its']>1:
-            old = convergence['bound'][convergence.get(its)-1] #assign bound from previous iteration
-            new = convergence['bound'][convergence.get(its)]
+        if convergence['its']>0:
+            old = convergence['bound'][convergence['its']-1] #assign bound from previous iteration
+            new = convergence['bound'][convergence['its']]
             convergence_check = (new-old)/np.abs(old)
             if emtol!=0: 
                 if convergence_check>0 | settings['convergence']['allow.neg.change']:
@@ -510,10 +509,10 @@ class STM:
                         if verbose: 
                             print('Model converged.')
                             return convergence
-        if convergence['its']==maxits: 
-            if verbose & emtol != 0: 
+        if convergence['its']+1==maxits: 
+            if (verbose) & (emtol != 0): 
                 print('Model terminated before convergence reached.\n')
-            if verbose & emtol == 0: 
+            if (verbose) & (emtol == 0): 
                 print('Model terminated after requested number of steps. \n')
             convergence['stopits'] = True
             return convergence

@@ -33,8 +33,6 @@ class generate_docs:
 
         self.alpha = alpha
         self.n_topics=n_topics
-
-
         
         self.n_docs = n_docs
         self.n_words = n_words

@@ -37,13 +37,13 @@ def stm_control(documents, settings, model=None):
     t1 = time.process_time()
     stopits = False
     convergence = None
-
+    iterator = 0
     while not stopits:
         
         ############
         # Run E-Step    
         sigma_ss, beta_ss, bound_ss, nu = model.e_step(documents)
-
+        iterator += 1
         print("Completed E-Step ({} seconds). \n".format(math.floor((time.process_time()-t1))))
 
         ############
@@ -151,4 +151,4 @@ settings = {
 
 
 
-stm_control(documents, settings, model=None)
+results = stm_control(documents, settings, model=None)
