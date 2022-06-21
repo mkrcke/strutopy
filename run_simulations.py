@@ -3,13 +3,15 @@ import matplotlib.pyplot as plt
 import time
 import math
 import json
+
 # custom packages
+
 from stm import STM
 from simulate import generate_docs
 
 # Parameter Settings (required for simulation process)
 V=500
-num_topics = 10
+num_topics = 3
 A = 2
 verbose = True
 interactions = False #settings.kappa
@@ -17,7 +19,7 @@ interactions = False #settings.kappa
 # Initialization and Convergence Settings
 init_type = "Random" #settings.init
 ngroups = 1 #settings.ngroups
-max_em_its = 40 #settings.convergence
+max_em_its = 20 #settings.convergence
 emtol = 1e-5 #settings.convergence
 sigma_prior=0 #settings.sigma.prior
 
@@ -38,7 +40,7 @@ def stm_control(documents, settings, model=None):
         t1 = time.process_time()
         ############
         # Run E-Step    
-        sigma_ss, beta_ss, bound_ss, nu = model.e_step(documents)
+        sigma_ss, beta_ss, bound_ss = model.e_step(documents)
         print("Completed E-Step ({} seconds). \n".format(math.floor((time.process_time()-t1))))
 
         ############
@@ -55,7 +57,7 @@ def stm_control(documents, settings, model=None):
         )
 
         sigma = model.opt_sigma(
-            nu = nu, 
+            nu = sigma_ss, 
             mu = mu, 
             sigprior = settings['sigma']['prior']
         )
@@ -86,7 +88,7 @@ def basic_simulations(n_docs, n_words, V, ATE, alpha, display=True):
         generator.display_props()
     return documents
 
-# Here we are simulating 100 documents with 40 words each. We are sampling from a multinomial distribution with dimension V.
+# Here we are simulating 100 documents with 100 words each. We are sampling from a multinomial distribution with dimension V.
 # Note however that we will discard all elements from the vector V that do not occur.
 # This leads to a dimension of the vocabulary << V
 np.random.seed(123)

@@ -6,6 +6,9 @@ from scipy import optimize
 import scipy
 from sklearn.preprocessing import OneHotEncoder
 import sklearn.linear_model
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 """ Class definition"""
@@ -13,7 +16,8 @@ import sklearn.linear_model
 
 class STM:
     """ Class for training STM."""
-    def __init__(self, settings, documents, dictionary):
+    def __init__(self, settings, documents, dictionary, dtype=np.float32):
+        self.dtype = np.finfo(dtype).dtype
         self.Ndoc = None
         self.kappa_initialized = None
         self.eta = None
@@ -21,6 +25,16 @@ class STM:
         self.siginv = None
         self.sigmaentropy = None
         self.settings=settings
+
+        # store user-supplied parameters
+        if len(documents) is None: 
+            raise ValueError(
+                'documents must be specified to establish input space'
+            )
+        if self.settings['dim']['K'] == 0:
+            raise ValueError("Number of topics must be specified")
+        if self.settings['dim']['A'] == 1:
+            logger.warning("no dimension for the topical content provided")
 
 
         self.documents = documents
@@ -39,6 +53,8 @@ class STM:
         self.init_sigma()
         self.init_kappa()
 
+    # TODO: check initializations of mu, sigma, lambda, kappa and beta
+
     def init_beta(self):
         beta_init = random.gamma(.1,1, self.V*self.K).reshape(self.K,self.V)
         beta_init_normalized = (beta_init / np.sum(beta_init, axis=1)[:,None])
@@ -49,16 +65,15 @@ class STM:
         else: 
             self.beta = beta_init_normalized
             [np.testing.assert_almost_equal(sum_over_words, 1) for i in range(self.A) for sum_over_words in np.sum(self.beta, axis=1)]
-            
-
+        assert self.beta.shape == (self.K,self.V), \
+            "Invalid beta shape. Got shape %s, but expected %s" % (str(self.beta.shape), str(self.K, self.V))
 
     def init_mu(self):
-        self.mu = np.array([0]*(self.K-1))[:,None]
+        self.mu = np.zeros(self.K-1)[:,None]
 
     def init_sigma(self):
         self.sigma = np.zeros(((self.K-1),(self.K-1)))
         np.fill_diagonal(self.sigma, 20)
-
 
     def init_lambda(self):
         """
@@ -67,9 +82,11 @@ class STM:
         """
         self.lambd = [np.zeros(self.K-1)]*self.N
            
-
-    """ Initializing Topical Content Model Parameters"""
+   
     def init_kappa(self): 
+        """
+        Initializing Topical Content Model Parameters
+        """
         # read in documents and vocab
         flat_documents = [item for sublist in self.documents for item in sublist]
         m = []
@@ -111,25 +128,30 @@ class STM:
 
     
     def lhood(self, mu, eta, word_count, eta_long, beta_doc, Ndoc, phi, theta, neta):
-        """ Computes Likelihood """
+        """
+        Computes Likelihood
+        """
         # precompute the difference since we use it twice
-        diff = (eta-mu)
+        diff = (eta-self.mu)
         #formula 
         #-.5*diff@self.siginv@diff+np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
         part1 = np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
-        part2 = -.5*diff@self.siginv@diff
+        part2 = .5*diff@self.siginv@diff
         return part2 - part1
         
     def grad(self, mu, eta, word_count, eta_long, beta_doc, Ndoc, phi, theta, neta):
-        """ Define Gradient """
+        """
+        Define Gradient
+        """
         #formula
         part1 = np.delete(np.sum(phi * word_count,axis=1) - Ndoc*theta, neta)
-        part2 = self.siginv@(eta-mu)
-        return part1 - part2
+        part2 = self.siginv@(eta-self.mu)
+        return part2 - part1
 
     
     def e_step(self, documents):
-        """ Optimize the following parameters: 
+        """
+        Optimize the following parameters: 
         Parameters: 
         - documents: a collection of document in the required (BoW) format
         - eta: a vector of length K-1 containing the initial starting value for eta
@@ -173,32 +195,34 @@ class STM:
         # maintaining a small dimension for the sufficient statistics.
         ############
         # input checks
-        # get mu from dict for second iteration  
-        if type(self.mu) is dict: 
-            self.mu = self.mu.get('mu')
-            update_mu = True
+        # # get mu from dict for second iteration  
+        # if type(self.mu) is dict: 
+        #     self.mu = self.mu.get('mu')
+        #     update_mu = True
 
-        else:
-            mu_i = self.mu.flatten()
-            update_mu = False
+        # else:
+        #     mu_i = self.mu.flatten()
+        #     update_mu = False
         
         self.iterator = 0
         #set parameters for one document (i)
         for i in range(self.N):
 
-            if update_mu: 
-                mu_i = self.mu[i]
+            #values from last iteration
+            #if update_mu: 
+            mu_i = self.mu#[i-1]
+            eta = self.lambd[i-1]
             
-            eta = self.lambd[i]
             neta = len(eta)
             eta_long = np.insert(eta,neta,0)
 
             #set document specs
             doc = documents[i]
-            words_1v = self.get_words(doc)
+            idx_1v = self.get_words(doc)
             aspect = self.get_aspect(i)
-            beta_doc_kv = self.get_beta(words_1v, aspect)
-            #np.testing.assert_array_less(np.sum(beta_doc_kv, axis=1), 1)
+            beta_doc_kv = self.get_beta(idx_1v, aspect)
+            assert np.all(beta_doc_kv >= 0), \
+                "Some entries of beta are negative.  Are you sure you didn't pass the logged version of beta?"
             word_count_1v = np.array([y for x,y in doc]) #count of words in document
             Ndoc = np.sum(word_count_1v)
             # initial values
@@ -215,8 +239,9 @@ class STM:
             
             # Compute Hessian, Phi and Lower Bound 
             hess_inv = opti.hess_inv
+            print(opti.message)
             #hess = self.compute_hessian(eta = opti.x, word_count=word_count_1v, beta_doc_kv=beta_doc_kv)
-            #hess_inv = self.invert_hessian(hess)
+            #hess_inv = self.invert_hessian(hess_inv)
             nu = self.compute_nu(hess_inv)
             bound_d, phi = self.lower_bound(hess_inv, mu = mu_i, word_count=word_count_1v, beta_doc_kv=beta_doc_kv, eta=opti.x)
 
@@ -232,13 +257,13 @@ class STM:
             #Update sufficient statistics        
             sigma_ss = sigma_ss + nu
             if self.interactions: 
-                beta_ss[aspect][:,np.array(words_1v)] = phi + np.take(beta_ss[aspect], words_1v, 1)
+                beta_ss[aspect][:,np.array(idx_1v)] = phi + np.take(beta_ss[aspect], idx_1v, 1)
             else: 
-                beta_ss[:,np.array(words_1v)] = phi + np.take(beta_ss, words_1v, 1)
+                beta_ss[:,np.array(idx_1v)] = phi + np.take(beta_ss, idx_1v, 1)
             bound = np.insert(bound, i, np.float(bound_d))
             self.lambd[i] = opti.x
 
-        return sigma_ss, beta_ss, bound, nu
+        return sigma_ss, beta_ss, bound
 
     def get_beta(self, words, aspect):
         """ returns the topic-word distribution for a document with the respective topical content covariate (aspect)"""
@@ -290,7 +315,7 @@ class STM:
         p2_diag = sum(word_count)*theta
 
         #alter diagonal entries of the hessian
-        np.fill_diagonal(neg_hess, np.diag(neg_hess)-p1_diag + p2_diag) 
+        np.fill_diagonal(neg_hess, np.diag(neg_hess)-p1_diag - p2_diag) 
         
         hess_kminus1bykminus1 = neg_hess[:-1,:-1]
         
@@ -367,9 +392,8 @@ class STM:
         return nu
     
     def lower_bound(self, hess_inverse, mu, word_count, beta_doc_kv, eta):
-
         """
-        computes the elbo as a scalar
+        computes the ELBO for each document
         """
         eta_long_K = np.insert(eta,len(eta),0)
         expeta_K = np.exp(eta_long_K)
@@ -441,6 +465,9 @@ class STM:
         return(data.loc[:,x]) # add intercept! 
 
     def opt_mu(self, covar, enet, ic_k, maxits, mode = "L1"):
+        if mode == "CTM": 
+            assert self.A < 2, 'Uses column means for the mean, since no covariates are specified.'
+            self.mu = np.mean(self.lambd, axis=0)
         #prepare covariate matrix for modeling 
         try:
             covar = covar.astype('category')
@@ -460,15 +487,12 @@ class STM:
         gamma = np.insert(fitted_model.coef_, 0, fitted_model.intercept_).reshape(self.K-1,3)
         design_matrix = np.c_[ np.ones(covarOHE.shape[0]), covarOHE]
         #compute mu
-        mu = design_matrix@gamma.T   
-        return mu
+        self.mu = design_matrix@gamma.T   
+        return self.mu
         
     def opt_sigma(self, nu, mu, sigprior):
         #find the covariance
-        # if ncol(mu) == 1: 
-        #     covariance = np.cross(sweep(lambd, 2, STATS=as.numeric(mu), FUN="-")
-        # else: 
-        covariance = (self.lambd - mu).T@(self.lambd-mu)
+        covariance = (self.lambd - self.mu).T@(self.lambd-self.mu)
         sigma = (covariance + nu)/self.lambd[0].shape[0]
         get_type(sigma)
         self.sigma = np.diag(np.diag(sigma))*sigprior + (1-sigprior)*sigma
@@ -478,7 +502,7 @@ class STM:
         # computes the update for beta based on the SAGE model 
         # for now: just computes row normalized beta values
         if kappa is None: 
-            self.beta = beta_ss/np.sum(beta_ss) 
+            self.beta = beta_ss/np.sum(beta_ss, axis=1)[:,None] 
         else: 
             print(f"implementation for {kappa} is missing")
         #if its a SAGE model (Eisenstein et al., 2013) use the distributed poissons
@@ -527,11 +551,10 @@ def stable_softmax(x):
     """Compute softmax values for each sets of scores in x."""
     xshift = x-np.max(x)
     exps = np.exp(xshift)
-    # assert sum(e_x/e_x.sum(axis=0)) == 1
     return exps / np.sum(exps)
 
 def softmax_weights(x, weight):
-    """Compute softmax values for each sets of scores in x.""" 
+    """Compute weighted softmax values for each sets of scores in x.""" 
     xshift = x - np.max(x)
     exps = weight*np.exp(xshift)[:,None]
     return exps / np.sum(exps)
