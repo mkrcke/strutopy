@@ -136,7 +136,7 @@ class STM:
         #formula 
         #-.5*diff@self.siginv@diff+np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
         part1 = np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
-        part2 = .5*diff@self.siginv@diff
+        part2 = .5*diff.T@self.siginv@diff
         return part2 - part1
         
     def grad(self, mu, eta, word_count, eta_long, beta_doc, Ndoc, phi, theta, neta):

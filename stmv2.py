@@ -230,8 +230,9 @@ class STM:
 
             hess_inv_i = eta_hat_i.hess_inv # TODO: Make a self.inverted_hessian[i]
             # print(hess_inv_i.message)
-            #hess = self.compute_hessian(eta = opti.x, word_count=word_count_1v, beta_doc_kv=beta_doc_kv)
-            #hess_inv = self.invert_hessian(hess_inv)
+            # TODO: replace approximation with analytically derived Hessian
+            # hess = self.compute_hessian(eta = self.eta[i], word_count=word_count_1v, beta_doc_kv=beta_doc_kv)
+            # hess_inv_i = self.invert_hessian(hess)
 
             # Delta NU
             nu = self.compute_nu(hess_inv_i)
@@ -242,7 +243,7 @@ class STM:
                 mu=self.mu,
                 word_count=word_count_1v,
                 beta_doc_kv=beta_doc_kv,
-                eta=eta_hat_i.x
+                eta=self.eta[i]
             )
             #print(bound_i)
 
@@ -318,7 +319,8 @@ class STM:
             self.E_step()
             self.M_step()
 
-            if self.EM_is_converged():
+            if self.convergence_check():
+                print('model converged')
                 break
 
     # _____________________________________________________________________    
@@ -328,13 +330,13 @@ class STM:
         emtol = self.settings['convergence']['em.converge.thresh']
 
         convergence_check = (new - old)/np.abs(old)
-
+        print(f'relative change: {convergence_check}')
         if convergence_check < emtol:
             return True
         else:
             return False
 
-    def convergence_check(self, convergence):
+    def convergence_check(self, convergence=None):
         verbose = self.settings['verbose']
         emtol = self.settings['convergence']['em.converge.thresh']
         maxits = self.settings['convergence']['max.em.its']
@@ -390,9 +392,8 @@ class STM:
         # precompute the difference since we use it twice
         diff = (eta-mu)
         #formula 
-        #-.5*diff@self.siginv@diff+np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
         part1 = np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
-        part2 = .5*diff@self.siginv@diff.T
+        part2 = .5*diff.T@self.siginv@diff
         return np.float32(part2 - part1)
 
     def grad(self, mu, eta, word_count, eta_long, beta_doc, Ndoc, phi, theta, neta):
@@ -402,7 +403,55 @@ class STM:
         #formula
         part1 = np.delete(np.sum(phi * word_count,axis=1) - Ndoc*theta, neta)
         part2 = self.siginv@(eta-mu).T # Check here!!! for dimensions
-        return part2 - part1
+        return np.float32(part2 - part1)
+
+    def compute_hessian(self, eta, word_count, beta_doc_kv): 
+        """
+        computes hessian matrix for the variational distribution 
+        first, off diagonal values are computed.
+        diagonal values are replaced afterward
+        in the end, hessian should be positive definite
+        """
+        # off diagonal entries
+        eta_long_K = np.insert(eta,len(eta),0)
+        theta = self.stable_softmax(eta_long_K)
+        if not np.all((theta > 0) & (theta < 1)): 
+            raise ValueError("values of theta not between 0 and 1")
+        expected_phi = self.softmax_weights(eta_long_K, beta_doc_kv)
+        p1_offdiag = (np.sqrt(word_count)*expected_phi)@(np.sqrt(word_count)*expected_phi).T
+        # c.f. (theta * theta.t()); in the C++ implementation
+        # gives a K by K matrix 
+        p2_offdiag = sum(word_count)*theta[:,None]@theta[None,:]
+
+        #should be positive
+        neg_hess = p1_offdiag - p2_offdiag
+
+        # diagonal entries
+        p1_diag = np.sum(np.multiply(np.multiply(np.sqrt(word_count), expected_phi), np.sqrt(word_count)), axis = 1)
+        p2_diag = sum(word_count)*theta
+
+        #alter diagonal entries of the hessian
+        np.fill_diagonal(neg_hess, np.diag(neg_hess)-p1_diag - p2_diag) 
+        
+        hess_kminus1bykminus1 = neg_hess[:-1,:-1]
+        
+        neg_hess = hess_kminus1bykminus1 + self.siginv # at this point, the hessian is complete
+
+        return neg_hess
+    
+    def invert_hessian(self, hess):
+        """
+        Invert hessian via cholesky decomposition 
+        error -> not properly converged: make the matrix positive definite
+        np.linalg.cholesky(a) requires the matrix a to be hermitian positive-definite
+        """
+        try:  
+            hess_inverse = np.linalg.cholesky(hess)
+        except:
+            #hess = self.validate_positive_definitive(hess)
+            hess_inverse = np.linalg.cholesky(hess + 1e-12 * np.eye(hess.shape[0]))
+        
+        return hess_inverse
 
     def compute_nu(self, hess_inverse): 
         """
@@ -434,7 +483,7 @@ class STM:
 # %%
 
 # Parameter Settings (required for simulation process)
-V=500
+V=1000
 num_topics = 3
 A = 2
 verbose = True
@@ -444,7 +493,7 @@ interactions = False #settings.kappa
 init_type = "Random" #settings.init
 ngroups = 1 #settings.ngroups
 max_em_its = 20 #settings.convergence
-emtol = 1e-5 #settings.convergence
+emtol = 0 #settings.convergence
 sigma_prior=0 #settings.sigma.prior
 
 
