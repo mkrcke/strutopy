@@ -26,9 +26,6 @@ logger = logging.getLogger(__name__)
 
 # %%
 
-
-
-
 class STM:
 
     def __init__(self, settings, documents, dictionary, dtype=np.float32):
@@ -72,6 +69,8 @@ class STM:
 
     # _____________________________________________________________________
     def init_global_params(self):
+        """initialises global parameters beta, mu, eta, sigma and kappa
+        """
         # Set global params
         self.init_beta()
         self.init_mu()
@@ -269,7 +268,18 @@ class STM:
         self.last_bounds.append(self.bound)
 
     def get_beta(self, words, aspect):
-        """ returns the topic-word distribution for a document with the respective topical content covariate (aspect)"""
+        """ returns the topic-word distribution for a document with the respective topical content covariate (aspect)
+
+        Args:
+            words (ndarray): 1D-array with word indices for a specific document
+            aspect (int, float32): topical content covariate for a specific document
+
+        Raises:
+            ValueError: _description_
+
+        Returns:
+            beta_doc_kv: topic-word distribution for a specific document, based on word indices and aspect
+        """
         if not np.all((self.beta >= 0)): 
             raise ValueError("Some entries of beta are negative.")
         if self.interactions: 
@@ -337,18 +347,23 @@ class STM:
             print(f"implementation for {kappa} is missing")
 
     def inference(self):
-
+        t1 = time.process_time()
         for _iteration in range(100):
             self.E_step()
             self.M_step()
 
-            if self.convergence_check():
-                print('model converged')
+            if self.EM_is_converged():
+                self.time_processed = time.process_time()-t1
+                print(f'model converged in iteration {_iteration} after {self.time_processed}s')
+                print('saving model...')
+                self.save_model()
                 break
             if self.max_its_reached(_iteration): 
-                print('maximum number of iterations reached')
+                self.time_processed = time.process_time()-t1
+                print(f'maximum number of iterations ({max_em_its}) reached after {self.time_processed} seconds')
+                print('saving model...')
+                self.save_model()
                 break
-
 
     # _____________________________________________________________________    
     def EM_is_converged(self, convergence=None):
@@ -356,7 +371,7 @@ class STM:
         old = self.last_bounds[-2]
         emtol = self.settings['convergence']['em.converge.thresh']
 
-        convergence_check = (new - old)/np.abs(old)
+        convergence_check = np.abs((new - old)/np.abs(old))
         print(f'relative change: {convergence_check}')
         if convergence_check < emtol:
             return True
@@ -364,43 +379,11 @@ class STM:
             return False
     
     def max_its_reached(self, _iteration):
-        if _iteration == max_em_its:
+        if _iteration == max_em_its-1:
             return True
         else:
             _iteration += 1
             return False
-
-    def convergence_check(self, convergence=None):
-        verbose = self.settings['verbose']
-        emtol = self.settings['convergence']['em.converge.thresh']
-        maxits = self.settings['convergence']['max.em.its']
-        # initialize the convergence object if empty
-        if convergence is None: 
-            convergence = {'bound':np.zeros(maxits), 'its':0, 'converged':False, 'stopits':False}
-        # fill in the current bound
-        convergence['bound'][convergence.get('its')] = self.bound
-        # if not first iteration
-        if convergence['its']>0:
-            old = convergence['bound'][convergence['its']-1] #assign bound from previous iteration
-            new = convergence['bound'][convergence['its']]
-            convergence_check = (new-old)/np.abs(old)
-            if emtol!=0: 
-                if convergence_check>0 | self.settings['convergence']['allow.neg.change']:
-                    if convergence_check < emtol: 
-                        convergence['converged'] = True
-                        convergence['stopits'] = True
-                        if verbose: 
-                            print('Model converged.')
-                            return convergence
-        if convergence['its']+1==maxits: 
-            if (verbose) & (emtol != 0): 
-                print('Model terminated before convergence reached.\n')
-            if (verbose) & (emtol == 0): 
-                print('Model terminated after requested number of steps. \n')
-            convergence['stopits'] = True
-            return convergence
-        convergence['its'] += 1
-        return convergence['converged']
 
     def stable_softmax(self, x):
         """Compute softmax values for each sets of scores in x."""
@@ -551,9 +534,22 @@ class STM:
         exp_eta_extend = np.exp(eta_extend)
         self.phi = beta_doc_kv*exp_eta_extend[:,None]
         return self.phi 
+    
+    def save_model(self):
+        model = {
+            'bound':self.last_bounds,
+            'mu': self.mu,
+            'sigma':self.sigma,
+            'beta':self.beta,
+            'settings': self.settings,
+            'time_processed':self.time_processed}
+        json.dump(model, open("stm_model.json", "w"), cls=NumpyEncoder)
 
-
-
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
 # %% Init params for training _____________________
 # %%
 
@@ -567,8 +563,8 @@ interactions = False #settings.kappa
 # Initialization and Convergence Settings
 init_type = "Random" #settings.init
 ngroups = 1 #settings.ngroups
-max_em_its = 20 #settings.convergence
-emtol = 0 #settings.convergence
+max_em_its = 100 #settings.convergence
+emtol = 0.01 #settings.convergence
 sigma_prior=0 #settings.sigma.prior
 
 
@@ -583,8 +579,8 @@ def basic_simulations(n_docs, n_words, V, ATE, alpha, display=True):
 # Note however that we will discard all elements from the vector V that do not occur.
 # This leads to a dimension of the vocabulary << V
 np.random.seed(123)
-documents, vocabulary = basic_simulations(n_docs=100, n_words=40, V=500, ATE=.2, alpha=np.array([.3,.4,.3]), display=False)
-betaindex = np.concatenate([np.repeat(0,50), np.repeat(1,50)])
+documents, vocabulary = basic_simulations(n_docs=500, n_words=150, V=1000, ATE=.2, alpha=np.array([.3,.4,.3]), display=False)
+betaindex = np.concatenate([np.repeat(0,len(documents)/2), np.repeat(1,len(documents)/2)])
 num_topics = 3
 dictionary=np.arange(vocabulary)
 
