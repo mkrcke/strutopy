@@ -32,23 +32,23 @@ logger = logging.getLogger(__name__)
 class STM:
 
     def __init__(self, settings, documents, dictionary, dtype=np.float32):
+        """
+            beta : {float, numpy.ndarray of float, list of float, str}, optional
+            A-priori belief on topic-word distribution, this can be:
+                * scalar for a symmetric prior over topic-word distribution,
+                * 1D array of length equal to num_words to denote an asymmetric user defined prior for each word,
+                * matrix of shape (num_topics, num_words) to assign a probability for each word-topic combination.
+        """
 
         self.dtype = np.finfo(dtype).dtype # Why this?
 
-        # Do we need this part?
-        self.Ndoc = None
-        self.kappa_initialized = None
-        # self.eta = None
-        self.eta_long = None
-        self.siginv = None
-        self.sigmaentropy = None
-
-        # How to name this part?
+        # Specify Corpus & Settings
+        # TODO: Unit test for corpus structure
         self.settings=settings
         self.documents = documents
         self.dictionary = dictionary
 
-        # store user-supplied parameters
+        # test and store user-supplied parameters
         if len(documents) is None: 
             raise ValueError(
                 'documents must be specified to establish input space'
@@ -58,7 +58,6 @@ class STM:
         if self.settings['dim']['A'] == 1:
             logger.warning("no dimension for the topical content provided")
 
-
         self.V = self.settings['dim']['V'] # Number of words
         self.K = self.settings['dim']['K'] # Number of topics
         self.A = self.settings['dim']['A'] # TODO: when data changes ...
@@ -66,6 +65,7 @@ class STM:
         self.interactions = settings['kappa']['interactions']
         self.betaindex = settings['covariates']['betaindex']
         
+        # initialize bound? 
         self.last_bounds = [0.00001]
 
         self.init_global_params() # Think about naming. Are these global params?
@@ -86,7 +86,7 @@ class STM:
 
         beta_init = random.gamma(.1,1, self.V*self.K).reshape(self.K,self.V)
         beta_init_normalized = (beta_init / np.sum(beta_init, axis=1)[:,None])
-        if self.interactions: 
+        if self.interactions: #TODO: replace ifelse condition by logic
             self.beta = np.repeat(beta_init_normalized[None,:], self.A, axis=0)
             # test if probabilities sum to 1      
             [np.testing.assert_almost_equal(sum_over_words, 1) for i in range(self.A) for sum_over_words in np.sum(self.beta[i], axis=1)]
@@ -106,7 +106,6 @@ class STM:
 
     def init_eta(self):
         """
-        initialize lambda as a list to fill mean values for each document 
         dimension: N by K-1
         """
         self.eta = np.zeros((self.N, self.K-1))
@@ -158,13 +157,11 @@ class STM:
     # _____________________________________________________________________
     def E_step(self):
         """
-        
-        Returns:
+        updates the sufficient statistics for each e-step iteration:
             sigma_ss: np.array of shape ((k-1), (k-1))
             beta_ss: np.array of shape (k, v) but might need A
             bound: might be implemented as list len(#iterations)
         """
-
         # 2) Precalculate common components
         while True:
             try: 
@@ -183,7 +180,7 @@ class STM:
     
         for i in range(self.N):
 
-            eta_long = np.insert(self.eta[i], self.K-1, 0)
+            eta_extend = np.insert(self.eta[i], self.K-1, 0)
 
             #set document specs
             doc = documents[i] # TODO: Make documents a numpy array
@@ -203,9 +200,9 @@ class STM:
             Ndoc = np.sum(word_count_1v)
 
             # initial values
-            theta_1k = self.stable_softmax(eta_long)
+            theta_1k = self.stable_softmax(eta_extend)
 
-            phi_vk = self.softmax_weights(eta_long, beta_doc_kv)
+            phi_vk = self.softmax_weights(eta_extend, beta_doc_kv)
             
             # optimize variational posterior
             # does not matter if we use optimize.minimize(method='BFGS') or optimize fmin_bfgs()
@@ -215,42 +212,52 @@ class STM:
             #     where ``n`` is the number of independent variables.
             # args : tuple, optional
 
-
-            eta_hat_i = optimize.minimize(
-                self.lhood,
-                x0=self.eta[i],
-                args=(self.mu, word_count_1v, eta_long, beta_doc_kv, Ndoc, phi_vk, theta_1k, self.K-1),
-                jac=self.grad,
-                method="BFGS"
-            )
-
-            self.eta[i] = eta_hat_i.x
+            # We want to maximize f, but numpy only implements minimize, so we
+            # minimize -f
+            # word_count_1v, eta_long, beta_doc_kv, Ndoc, phi_vk, theta_1k, self.K-1
+            res = self.optimize_eta(
+                eta=self.eta[i],
+                word_count=word_count_1v,
+                eta_extend=eta_extend,
+                beta_doc=beta_doc_kv,
+                Ndoc=Ndoc,
+                phi=phi_vk,
+                theta=theta_1k
+                )
+            print(f"document {i}:", res.message)
+            self.eta[i] = res.x
             
             # Compute Hessian, Phi and Lower Bound 
 
-            hess_inv_i = eta_hat_i.hess_inv # TODO: Make a self.inverted_hessian[i]
+            hess_inv_i = res.hess_inv # TODO: Make a self.inverted_hessian[i]
             # print(hess_inv_i.message)
             # TODO: replace approximation with analytically derived Hessian
             # hess = self.compute_hessian(eta = self.eta[i], word_count=word_count_1v, beta_doc_kv=beta_doc_kv)
             # hess_inv_i = self.invert_hessian(hess)
 
             # Delta NU
-            nu = self.compute_nu(hess_inv_i)
+            nu = self.optimize_nu(hess_inv_i)
 
-            # Delta Bound, Delta Phi
-            bound_i, phi = self.lower_bound(
+            # Delta Bound
+            bound_i = self.lower_bound(
                 hess_inv_i,
                 mu=self.mu,
                 word_count=word_count_1v,
                 beta_doc_kv=beta_doc_kv,
                 eta=self.eta[i]
             )
+            # Delta Phi
+            phi = self.update_z(
+                eta = self.eta[i],
+                beta_doc_kv=beta_doc_kv)
+            
             #print(bound_i)
 
             calculated_bounds.append(bound_i)
 
             self.sigma += nu
 
+            #TODO: combine into one    
             if self.interactions:
                 self.beta[aspect][:, np.array(idx_1v)] += phi
             else: 
@@ -278,7 +285,7 @@ class STM:
 
         t1 = time.process_time()
 
-        self.opt_mu()
+        self.update_mu()
             # covar=self.settings['covariates']['X'],
             # enet=self.settings['gamma']['enet'],
             # ic_k=self.settings['gamma']['ic.k'],
@@ -286,26 +293,42 @@ class STM:
             # mode=self.settings['gamma']['mode']
 
 
-        self.opt_sigma(
+        self.update_sigma(
             nu=self.sigma, 
             sigprior=self.settings['sigma']['prior']
         )
         
-        self.opt_beta()
+        self.update_beta()
 
         print("Completed M-Step ({} seconds). \n".format(math.floor((time.process_time()-t1))))
 
-    def opt_mu(self):
+    def update_mu(self):
+        """
+        updates the mean parameter for the logistic normal distribution
+        """
         # Short hack
         self.mu = np.mean(self.eta, axis=0)
 
-    def opt_sigma(self, nu, sigprior):
+    def update_sigma(self, nu, sigprior):
+        """
+        Updates the variance covariance matrix for the logistic normal distribution
+
+        Args:
+            nu (_type_): variance-covariance for the variational document-topic distribution
+            sigprior (_type_): prior for the var-cov. matrix for the log-normal
+        """
         #find the covariance
         covariance = (self.eta - self.mu).T @ (self.eta-self.mu)
         sigma = (covariance + nu) / self.eta[0].shape[0] # Mayble replace with K-1
         self.sigma = np.diag(np.diag(sigma))*sigprior + (1-sigprior)*sigma
 
-    def opt_beta(self, kappa=None):
+    def update_beta(self, kappa=None):
+        """
+        Updates the topic-word distribution
+
+        Args:
+            kappa (_type_, optional): topical content covariate. Defaults to None.
+        """
         # computes the update for beta based on the SAGE model 
         # for now: just computes row normalized beta values
         if kappa is None:
@@ -315,13 +338,17 @@ class STM:
 
     def inference(self):
 
-        for _ in range(100):
+        for _iteration in range(100):
             self.E_step()
             self.M_step()
 
             if self.convergence_check():
                 print('model converged')
                 break
+            if self.max_its_reached(_iteration): 
+                print('maximum number of iterations reached')
+                break
+
 
     # _____________________________________________________________________    
     def EM_is_converged(self, convergence=None):
@@ -334,6 +361,13 @@ class STM:
         if convergence_check < emtol:
             return True
         else:
+            return False
+    
+    def max_its_reached(self, _iteration):
+        if _iteration == max_em_its:
+            return True
+        else:
+            _iteration += 1
             return False
 
     def convergence_check(self, convergence=None):
@@ -384,26 +418,38 @@ class STM:
         """returns type of an object x"""
         msg = f'type of {x}: {type(x)}'
         return msg
+    
+    def optimize_eta(self, eta, word_count, eta_extend, beta_doc, Ndoc, phi, theta): 
+        """Optimizes the variational parameter eta given the likelihood and the gradient function
+        """
+        def f(eta, word_count, eta_extend, beta_doc, Ndoc, phi, theta):
+            """objective for the variational update q(eta)
+            """
+            # precompute the difference since we use it twice
+            diff = (eta-self.mu)
+            #formula 
+            part1 = np.sum(word_count * (eta_extend.max() + np.log(np.exp(eta_extend - eta_extend.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
+            part2 = .5*diff.T@self.siginv@diff
+            return np.float32(part2 - part1)
 
-    def lhood(self, mu, eta, word_count, eta_long, beta_doc, Ndoc, phi, theta, neta):
-        """
-        Computes Likelihood
-        """
-        # precompute the difference since we use it twice
-        diff = (eta-mu)
-        #formula 
-        part1 = np.sum(word_count * (eta_long.max() + np.log(np.exp(eta_long - eta_long.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
-        part2 = .5*diff.T@self.siginv@diff
-        return np.float32(part2 - part1)
-
-    def grad(self, mu, eta, word_count, eta_long, beta_doc, Ndoc, phi, theta, neta):
-        """
-        Define Gradient
-        """
-        #formula
-        part1 = np.delete(np.sum(phi * word_count,axis=1) - Ndoc*theta, neta)
-        part2 = self.siginv@(eta-mu).T # Check here!!! for dimensions
-        return np.float32(part2 - part1)
+        def df(eta, word_count, eta_extend, beta_doc, Ndoc, phi, theta):
+            """gradient for the objective of the variational update q(etas)
+            """
+            #formula
+            part1 = np.delete(np.sum(phi * word_count,axis=1) - Ndoc*theta, self.K-1)
+            part2 = self.siginv@(eta-self.mu).T # Check here!!! for dimensions
+            return np.float32(part2 - part1)
+        
+        # We want to maximize f, but numpy only implements minimize, so we
+        # minimize -f
+        
+        return optimize.minimize(
+            f, #TODO: negation of lhood
+            x0=eta,
+            args=(word_count, eta_extend, beta_doc, Ndoc, phi, theta),
+            jac=df, #TODO: negation of grad
+            method="BFGS"
+            )
 
     def compute_hessian(self, eta, word_count, beta_doc_kv): 
         """
@@ -453,29 +499,58 @@ class STM:
         
         return hess_inverse
 
-    def compute_nu(self, hess_inverse): 
-        """
-        constructing nu
+    def optimize_nu(self, hess_inverse): 
+        """Given the inverse hessian returns the variance-covariance matrix for the variational distribution
+
+        Args:
+            hess_inverse (np.array): inverse hessian matrix for the variational distribution of eta
+
+        Returns:
+            nu (np.array): variance-covariance matrix for the variational distribution q(eta|lambda, nu). 
         """
         nu = np.linalg.inv(np.triu(hess_inverse))
         nu = nu@nu.T
         return nu
 
     def lower_bound(self, hess_inverse, mu, word_count, beta_doc_kv, eta):
+        """_summary_
+
+        Args:
+            hess_inverse (np.array): 2D_array ((K-1) x(K-1)) representing inverse hessian matrix for the variational distribution of eta
+            mu (np.array): 1D-array representing mean parameter for the logistic normal distribution
+            word_count (np.array): 1D-array of word counts for each document  
+            beta_doc_kv (np.array): 2D-array (K by V) containing the topic-word distribution for a specific document  
+            eta (_type_): 1D-array representing prior to the document-topic distribution
+
+        Returns:
+            bound: evidence lower bound (E(...))
+            phi: update for the variational latent parameter z TODO: disentangle the update for z from bound calculation
         """
-        computes the ELBO for each document
-        """
-        eta_long_K = np.insert(eta, len(eta), 0)
-        expeta_K = np.exp(eta_long_K)
-        theta = self.stable_softmax(eta_long_K)
+        eta_extend = np.insert(eta, len(eta), 0)
+        exp_eta_extend = np.exp(eta_extend)
+        theta = self.stable_softmax(eta_extend)
         #compute 1/2 the determinant from the cholesky decomposition
         detTerm = -np.sum(np.log(hess_inverse.diagonal()))
         diff = eta-mu
         ############## generate the bound and make it a scalar ##################
-        beta_temp_kv = beta_doc_kv*expeta_K[:,None]
+        beta_temp_kv = beta_doc_kv*exp_eta_extend[:,None]
         bound = np.log(theta[None:,]@beta_temp_kv)@word_count + detTerm - .5*diff.T@self.siginv@diff - self.sigmaentropy
-        phi = beta_temp_kv
-        return bound, phi
+        return bound
+    
+    def update_z(self, eta, beta_doc_kv): 
+        """Compute the update for the variational latent parameter z
+
+        Args:
+            eta (np.array): 1D-array representing prior to the document-topic distribution
+            beta_doc_kv (np.array): 2D-array (K by V) containing the topic-word distribution for a specific document
+
+        Returns:
+            phi: update for the variational latent parameter z
+        """
+        eta_extend = np.insert(eta, len(eta), 0)
+        exp_eta_extend = np.exp(eta_extend)
+        self.phi = beta_doc_kv*exp_eta_extend[:,None]
+        return self.phi 
 
 
 

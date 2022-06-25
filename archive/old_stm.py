@@ -148,6 +148,7 @@ class STM:
         part2 = self.siginv@(eta-self.mu)
         return part2 - part1
 
+    # optimize.minimize(self.lhood, x0=eta, args=(mu_i, word_count_1v, eta_long, beta_doc_kv, Ndoc, phi_vk, theta_1k, neta), jac=self.grad, method="BFGS")
     
     def e_step(self, documents):
         """

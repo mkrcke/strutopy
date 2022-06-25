@@ -137,7 +137,7 @@ def stm_control(documents, settings, model=None):
 
         t1 = time.process_time()
         
-        mu = model.opt_mu(
+        mu = model.update_mu(
             lambd,
             covar=settings['covariates']['X'],
             enet=settings['gamma']['enet'],
@@ -146,14 +146,14 @@ def stm_control(documents, settings, model=None):
             mode = settings['gamma']['mode']
         )
 
-        sigma = model.opt_sigma(
+        sigma = model.update_sigma(
             nu = sigma_ss,
             lambd = lambd, 
             mu = mu['mu'], 
             sigprior = settings['sigma']['prior']
         )
         
-        beta = model.opt_beta(
+        beta = model.update_beta(
             beta_ss, 
             kappa = None,
             #settings
