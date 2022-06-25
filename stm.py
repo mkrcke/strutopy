@@ -228,11 +228,13 @@ class STM:
             
             # Compute Hessian, Phi and Lower Bound 
 
-            hess_inv_i = res.hess_inv # TODO: Make a self.inverted_hessian[i]
-            # print(hess_inv_i.message)
-            # TODO: replace approximation with analytically derived Hessian
-            # hess = self.compute_hessian(eta = self.eta[i], word_count=word_count_1v, beta_doc_kv=beta_doc_kv)
-            # hess_inv_i = self.invert_hessian(hess)
+            # hess_inv_i = res.hess_inv # TODO: Make a self.inverted_hessian[i] # TODO: replace approximation with analytically derived Hessian
+
+            # 1) check if inverse is a legitimate cov matrix
+            # 2) if not, adjust matrix to be positive definite 
+            
+            hess_i = self.compute_hessian(eta = self.eta[i], word_count=word_count_1v, beta_doc_kv=beta_doc_kv)
+            hess_inv_i = self.invert_hessian(hess_i, hess_approx = res.hess_inv)
 
             # Delta NU
             nu = self.optimize_nu(hess_inv_i)
@@ -346,7 +348,7 @@ class STM:
         else: 
             print(f"implementation for {kappa} is missing")
 
-    def inference(self):
+    def expectation_maximization(self):
         t1 = time.process_time()
         for _iteration in range(100):
             self.E_step()
@@ -396,11 +398,6 @@ class STM:
         xshift = x - np.max(x)
         exps = weight*np.exp(xshift)[:,None]
         return exps / np.sum(exps)
-
-    def get_type(self, x):
-        """returns type of an object x"""
-        msg = f'type of {x}: {type(x)}'
-        return msg
     
     def optimize_eta(self, eta, word_count, eta_extend, beta_doc, Ndoc, phi, theta): 
         """Optimizes the variational parameter eta given the likelihood and the gradient function
@@ -412,8 +409,8 @@ class STM:
             diff = (eta-self.mu)
             #formula 
             part1 = np.sum(word_count * (eta_extend.max() + np.log(np.exp(eta_extend - eta_extend.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
-            part2 = .5*diff.T@self.siginv@diff
-            return np.float32(part2 - part1)
+            part2 = -.5*diff.T@self.siginv@diff
+            return np.float32(part2 + part1)*(-1)
 
         def df(eta, word_count, eta_extend, beta_doc, Ndoc, phi, theta):
             """gradient for the objective of the variational update q(etas)
@@ -421,7 +418,7 @@ class STM:
             #formula
             part1 = np.delete(np.sum(phi * word_count,axis=1) - Ndoc*theta, self.K-1)
             part2 = self.siginv@(eta-self.mu).T # Check here!!! for dimensions
-            return np.float32(part2 - part1)
+            return np.float32(part1 - part2)*(-1)
         
         # We want to maximize f, but numpy only implements minimize, so we
         # minimize -f
@@ -442,11 +439,11 @@ class STM:
         in the end, hessian should be positive definite
         """
         # off diagonal entries
-        eta_long_K = np.insert(eta,len(eta),0)
-        theta = self.stable_softmax(eta_long_K)
-        if not np.all((theta > 0) & (theta < 1)): 
+        eta_extend = np.insert(eta,len(eta),0)
+        theta = self.stable_softmax(eta_extend)
+        if not np.all((theta > 0) & (theta <= 1)): 
             raise ValueError("values of theta not between 0 and 1")
-        expected_phi = self.softmax_weights(eta_long_K, beta_doc_kv)
+        expected_phi = self.softmax_weights(eta_extend, beta_doc_kv)
         p1_offdiag = (np.sqrt(word_count)*expected_phi)@(np.sqrt(word_count)*expected_phi).T
         # c.f. (theta * theta.t()); in the C++ implementation
         # gives a K by K matrix 
@@ -468,7 +465,7 @@ class STM:
 
         return neg_hess
     
-    def invert_hessian(self, hess):
+    def invert_hessian(self, hess, hess_approx):
         """
         Invert hessian via cholesky decomposition 
         error -> not properly converged: make the matrix positive definite
@@ -478,7 +475,10 @@ class STM:
             hess_inverse = np.linalg.cholesky(hess)
         except:
             #hess = self.validate_positive_definitive(hess)
-            hess_inverse = np.linalg.cholesky(hess + 1e-12 * np.eye(hess.shape[0]))
+            try:
+                hess_inverse = np.linalg.cholesky(hess + 1e-12 * np.eye(hess.shape[0]))
+            except: 
+                hess_inverse = hess_approx
         
         return hess_inverse
 
@@ -563,7 +563,7 @@ interactions = False #settings.kappa
 # Initialization and Convergence Settings
 init_type = "Random" #settings.init
 ngroups = 1 #settings.ngroups
-max_em_its = 100 #settings.convergence
+max_em_its = 30 #settings.convergence
 emtol = 0.01 #settings.convergence
 sigma_prior=0 #settings.sigma.prior
 
@@ -579,7 +579,7 @@ def basic_simulations(n_docs, n_words, V, ATE, alpha, display=True):
 # Note however that we will discard all elements from the vector V that do not occur.
 # This leads to a dimension of the vocabulary << V
 np.random.seed(123)
-documents, vocabulary = basic_simulations(n_docs=500, n_words=150, V=1000, ATE=.2, alpha=np.array([.3,.4,.3]), display=False)
+documents, vocabulary = basic_simulations(n_docs=300, n_words=40, V=500, ATE=.2, alpha=np.array([.3,.4,.3]), display=False)
 betaindex = np.concatenate([np.repeat(0,len(documents)/2), np.repeat(1,len(documents)/2)])
 num_topics = 3
 dictionary=np.arange(vocabulary)
@@ -643,4 +643,4 @@ model = STM(settings, documents, dictionary)
 
 # %%
 
-model.inference()
+model.expectation_maximization()
