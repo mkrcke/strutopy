@@ -15,4 +15,3 @@ plt.show()
 stm_model['mu']
 np.log(stm_model['beta'])
 stm_model['sigma']
-
