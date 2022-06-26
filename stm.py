@@ -555,7 +555,7 @@ class NumpyEncoder(json.JSONEncoder):
 
 # Parameter Settings (required for simulation process)
 V=1000
-num_topics = 3
+num_topics = 10
 A = 2
 verbose = True
 interactions = False #settings.kappa
@@ -573,11 +573,9 @@ sigma_prior=0 #settings.sigma.prior
 # This leads to a dimension of the vocabulary << V
 np.random.seed(123)
 
-Corpus = CorpusCreation(n_topics=3, n_docs=100, n_words=40, V=500, treatment=True, alpha=np.array([0.3,0.4,0.3]), alpha_treatment=np.array([0.1,0.4,0.5]))
+Corpus = CorpusCreation(n_topics=num_topics, n_docs=100, n_words=40, V=500, treatment=False, alpha='symmetric')
 Corpus.generate_documents()
-
 betaindex = np.concatenate([np.repeat(0,len(Corpus.documents)/2), np.repeat(1,len(Corpus.documents)/2)])
-num_topics = 3
 
 
 # Set starting values and parameters
