@@ -8,7 +8,7 @@ import json
 # custom packages
 
 #from stm import STM
-from simulate import generate_docs
+from simulate import CorpusCreation
 
 import numpy as np
 
@@ -37,7 +37,7 @@ class STM:
                 * matrix of shape (num_topics, num_words) to assign a probability for each word-topic combination.
         """
 
-        self.dtype = np.finfo(dtype).dtype # Why this?
+        self.dtype = np.finfo(dtype).dtype
 
         # Specify Corpus & Settings
         # TODO: Unit test for corpus structure
@@ -182,7 +182,7 @@ class STM:
             eta_extend = np.insert(self.eta[i], self.K-1, 0)
 
             #set document specs
-            doc = documents[i] # TODO: Make documents a numpy array
+            doc = self.documents[i] # TODO: Make documents a numpy array
 
             doc_array = np.array(doc)
 
@@ -568,29 +568,25 @@ emtol = 0.01 #settings.convergence
 sigma_prior=0 #settings.sigma.prior
 
 
-def basic_simulations(n_docs, n_words, V, ATE, alpha, display=True):
-    generator = generate_docs(n_docs, n_words, V, ATE, alpha)
-    documents = generator.generate(n_docs)
-    if display == True:
-        generator.display_props()
-    return documents
-
 # Here we are simulating 100 documents with 100 words each. We are sampling from a multinomial distribution with dimension V.
 # Note however that we will discard all elements from the vector V that do not occur.
 # This leads to a dimension of the vocabulary << V
 np.random.seed(123)
-documents, vocabulary = basic_simulations(n_docs=300, n_words=40, V=500, ATE=.2, alpha=np.array([.3,.4,.3]), display=False)
-betaindex = np.concatenate([np.repeat(0,len(documents)/2), np.repeat(1,len(documents)/2)])
+
+Corpus = CorpusCreation(n_topics=3, n_docs=100, n_words=40, V=500, treatment=True, alpha=np.array([0.3,0.4,0.3]), alpha_treatment=np.array([0.1,0.4,0.5]))
+Corpus.generate_documents()
+
+betaindex = np.concatenate([np.repeat(0,len(Corpus.documents)/2), np.repeat(1,len(Corpus.documents)/2)])
 num_topics = 3
-dictionary=np.arange(vocabulary)
+
 
 # Set starting values and parameters
 settings = {
     'dim':{
         'K': num_topics, #number of topics
-        'V' : vocabulary, #number of words
+        'V' : len(Corpus.dictionary), #number of words
         'A' : A, #dimension of topical content
-        'N' : len(documents),
+        'N' : len(Corpus.documents),
     },
     'verbose':verbose,
     'kappa':{
@@ -638,7 +634,7 @@ settings = {
 
 # %%
 
-model = STM(settings, documents, dictionary)
+model = STM(settings, Corpus.documents, Corpus.dictionary)
 
 
 # %%
