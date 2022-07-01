@@ -1,4 +1,5 @@
 # %%
+
 import json
 import logging
 import math
@@ -10,10 +11,9 @@ import numpy.random as random
 import scipy
 import sklearn.linear_model
 from scipy import optimize
-from sklearn.preprocessing import OneHotEncoder
-
 #from stm import STM
 from simulate import CorpusCreation
+from sklearn.preprocessing import OneHotEncoder
 
 # custom packages
 
@@ -604,7 +604,7 @@ sigma_prior=0 #settings.sigma.prior
 # This leads to a dimension of the vocabulary << V
 np.random.seed(123)
 
-Corpus = CorpusCreation(n_topics=num_topics, n_docs=1000, n_words=40, V=500, treatment=False, alpha='symmetric')
+Corpus = CorpusCreation(n_topics=num_topics, n_docs=10000, n_words=150, V=5000, treatment=False, alpha='symmetric')
 Corpus.generate_documents()
 betaindex = np.concatenate([np.repeat(0,len(Corpus.documents)/2), np.repeat(1,len(Corpus.documents)/2)])
 
