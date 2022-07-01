@@ -485,13 +485,13 @@ class STM:
         dvec = np.where(dvec < magnitudes,magnitudes,dvec)
         # A Hermitian diagonally dominant matrix A with real non-negative diagonal entries is positive semidefinite. 
         np.fill_diagonal(M, dvec)
-        #check if hermitian p.-d.
-        #Print the eigenvalues of the Matrix
-        #print(np.linalg.eigvalsh(M))
-        #if not np.all(np.linalg.eigvals(M)>0):
-        #    raise ValueError('The input matrix must be positive semidefinite')
         return M
+<<<<<<< HEAD
     def decompose_hessian(self, hess):
+=======
+        
+    def invert_hessian(self, hess):
+>>>>>>> cceec4b7e7f1da518b92fa95ef6286ad928870af
         """
         Decompose hessian via cholesky decomposition 
         error -> not properly converged: make the matrix positive definite
@@ -501,6 +501,7 @@ class STM:
             L = np.linalg.cholesky(hess)
         except:
             try:
+<<<<<<< HEAD
                 L = np.linalg.cholesky(self.make_pd(hess))
                 print("converts Hessian via diagonal-dominance")
             except:
@@ -508,6 +509,14 @@ class STM:
                 print("adds a small number to the hessian")
         
         return L
+=======
+                hess_inverse = np.linalg.cholesky(self.make_pd(hess))
+                #print("converts Hessian via diagonal-dominance")
+            except:
+                hess_inverse = np.linalg.cholesky(self.make_pd(hess) + 1e-5 * np.eye(hess.shape[0]))
+                #print("adds a small number to the hessian")
+        return hess_inverse
+>>>>>>> cceec4b7e7f1da518b92fa95ef6286ad928870af
 
     def optimize_nu(self, L): 
         """Given the inverse hessian returns the variance-covariance matrix for the variational distribution
