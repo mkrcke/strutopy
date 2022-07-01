@@ -6,6 +6,7 @@ from gensim.test.utils import common_texts
 from gensim.corpora.dictionary import Dictionary
 from gensim.models import LdaModel
 
+
 ################# LDA #############################
 # https://github.com/RaRe-Technologies/gensim/blob/develop/gensim/models/ldamodel.py
 # Usage examples
@@ -35,7 +36,7 @@ for num_topics in test_topics:
     passes = 20
     iterations = 400
     eval_every = 5  # Don't evaluate model perplexity, takes too much time.
-    lda = LdaModel(Corpus.documents, id2word = Corpus.dictionary, num_topics=3, eval_every=eval_every)
+    lda = LdaModel(Corpus.documents, id2word = Corpus.dictionary, num_topics=num_topics, eval_every=eval_every)
 
     # evaluate the model
     top_topics = lda.top_topics(Corpus.documents)
@@ -51,12 +52,10 @@ for num_topics in test_topics:
     passes = 20
     iterations = 400
     eval_every = 5  # Don't evaluate model perplexity, takes too much time.
-    lda = LdaModel(Corpus.documents, id2word = Corpus.dictionary, num_topics=3, eval_every=eval_every)
+    lda = LdaModel(Corpus.documents, id2word = Corpus.dictionary, num_topics=num_topics, eval_every=eval_every)
 
     # evaluate the model
     perplexity = lda.log_perplexity(Corpus.documents)
 
-    print(f'perplexity for {num_topics} topics: %.4f.' %np.exp2(-perplexity))
+    print(f'perplexity for {num_topics} topics: %.4f.' %perplexity)
 
-
-# %%
