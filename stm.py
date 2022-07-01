@@ -11,9 +11,10 @@ import numpy.random as random
 import scipy
 import sklearn.linear_model
 from scipy import optimize
-#from stm import STM
-from simulate import CorpusCreation
 from sklearn.preprocessing import OneHotEncoder
+
+#from stm import STM
+from generate_docs import CorpusCreation
 
 # custom packages
 
@@ -234,14 +235,14 @@ class STM:
             # 2) if not, adjust matrix to be positive definite 
             
             hess_i = self.compute_hessian(eta = self.eta[i], word_count=word_count_1v, beta_doc_kv=beta_doc_kv)
-            hess_inv_i = self.invert_hessian(hess_i)
+            L_i = self.decompose_hessian(hess_i)
 
             # Delta NU
-            nu = self.optimize_nu(hess_inv_i)
+            nu = self.optimize_nu(L_i)
 
             # Delta Bound
             bound_i = self.lower_bound(
-                hess_inv_i,
+                L_i,
                 mu=self.mu,
                 word_count=word_count_1v,
                 beta_doc_kv=beta_doc_kv,
@@ -417,7 +418,7 @@ class STM:
             """
             #formula
             part1 = np.delete(np.sum(phi * word_count,axis=1) - Ndoc*theta, self.K-1)
-            part2 = self.siginv@(eta-self.mu).T # Check here!!! for dimensions
+            part2 = self.siginv@(eta-self.mu) # Check here!!! for dimensions
             return np.float32(part1 - part2)*(-1)
         
         # We want to maximize f, but numpy only implements minimize, so we
@@ -490,47 +491,42 @@ class STM:
         #if not np.all(np.linalg.eigvals(M)>0):
         #    raise ValueError('The input matrix must be positive semidefinite')
         return M
-    def invert_hessian(self, hess):
+    def decompose_hessian(self, hess):
         """
-        Invert hessian via cholesky decomposition 
+        Decompose hessian via cholesky decomposition 
         error -> not properly converged: make the matrix positive definite
         np.linalg.cholesky(a) requires the matrix a to be hermitian positive-definite
         """
         try:  
-            hess_inverse = np.linalg.cholesky(hess)
+            L = np.linalg.cholesky(hess)
         except:
             try:
-                hess_inverse = np.linalg.cholesky(self.make_pd(hess))
+                L = np.linalg.cholesky(self.make_pd(hess))
                 print("converts Hessian via diagonal-dominance")
             except:
-                hess_inverse = np.linalg.cholesky(self.make_pd(hess) + 1e-5 * np.eye(hess.shape[0]))
+                L = np.linalg.cholesky(self.make_pd(hess) + 1e-5 * np.eye(hess.shape[0]))
                 print("adds a small number to the hessian")
-            #hess = self.validate_positive_definitive(hess)
-            #
-     
-           # except: 
-            #    hess_inverse = hess_approx
         
-        return hess_inverse
+        return L
 
-    def optimize_nu(self, hess_inverse): 
+    def optimize_nu(self, L): 
         """Given the inverse hessian returns the variance-covariance matrix for the variational distribution
 
         Args:
-            hess_inverse (np.array): inverse hessian matrix for the variational distribution of eta
+            L (np.array): lower triangular matrix of cholesky decomposition
 
         Returns:
             nu (np.array): variance-covariance matrix for the variational distribution q(eta|lambda, nu). 
         """
-        nu = np.linalg.inv(np.triu(hess_inverse))
+        nu = np.linalg.inv(np.triu(L))
         nu = nu@nu.T
         return nu
 
-    def lower_bound(self, hess_inverse, mu, word_count, beta_doc_kv, eta):
+    def lower_bound(self, L, mu, word_count, beta_doc_kv, eta):
         """_summary_
 
         Args:
-            hess_inverse (np.array): 2D_array ((K-1) x(K-1)) representing inverse hessian matrix for the variational distribution of eta
+            L (np.array): 2D_array ((K-1) x(K-1)) representing lower triangular matrix of cholesky decomposition for the variational distribution of eta
             mu (np.array): 1D-array representing mean parameter for the logistic normal distribution
             word_count (np.array): 1D-array of word counts for each document  
             beta_doc_kv (np.array): 2D-array (K by V) containing the topic-word distribution for a specific document  
@@ -544,7 +540,7 @@ class STM:
         exp_eta_extend = np.exp(eta_extend)
         theta = self.stable_softmax(eta_extend)
         #compute 1/2 the determinant from the cholesky decomposition
-        detTerm = -np.sum(np.log(hess_inverse.diagonal()))
+        detTerm =  -np.sum(np.log(L.diagonal()))
         diff = eta-mu
         ############## generate the bound and make it a scalar ##################
         beta_temp_kv = beta_doc_kv*exp_eta_extend[:,None]
@@ -604,7 +600,7 @@ sigma_prior=0 #settings.sigma.prior
 # This leads to a dimension of the vocabulary << V
 np.random.seed(123)
 
-Corpus = CorpusCreation(n_topics=num_topics, n_docs=10000, n_words=150, V=5000, treatment=False, alpha='symmetric')
+Corpus = CorpusCreation(n_topics=num_topics, n_docs=1000, n_words=150, V=5000, treatment=False, alpha='asymmetric')
 Corpus.generate_documents()
 betaindex = np.concatenate([np.repeat(0,len(Corpus.documents)/2), np.repeat(1,len(Corpus.documents)/2)])
 
