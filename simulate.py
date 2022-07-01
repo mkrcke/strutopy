@@ -6,12 +6,13 @@
 # population that receives treatment and the other half is sampled from the population without treatment. 
 
 
-from random import betavariate
-import numpy as np
-import time
-import matplotlib.pyplot as plt
-from gensim.corpora.dictionary import Dictionary
 import logging
+import time
+from random import betavariate
+
+import numpy as np
+#import matplotlib.pyplot as plt
+from gensim.corpora.dictionary import Dictionary
 
 logger= logging.getLogger(__name__)
 

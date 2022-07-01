@@ -1,24 +1,24 @@
 # %%
-import numpy as np
-import matplotlib.pyplot as plt
-import time
-import math
 import json
+import logging
+import math
+#import matplotlib.pyplot as plt
+import time
 
-# custom packages
+import numpy as np
+import numpy.random as random
+import scipy
+import sklearn.linear_model
+from scipy import optimize
+from sklearn.preprocessing import OneHotEncoder
 
 #from stm import STM
 from simulate import CorpusCreation
 
-import numpy as np
+# custom packages
 
-import numpy.random as random
-import math
-from scipy import optimize
-import scipy
-from sklearn.preprocessing import OneHotEncoder
-import sklearn.linear_model
-import logging
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +234,7 @@ class STM:
             # 2) if not, adjust matrix to be positive definite 
             
             hess_i = self.compute_hessian(eta = self.eta[i], word_count=word_count_1v, beta_doc_kv=beta_doc_kv)
-            hess_inv_i = self.invert_hessian(hess_i, hess_approx = res.hess_inv)
+            hess_inv_i = self.invert_hessian(hess_i)
 
             # Delta NU
             nu = self.optimize_nu(hess_inv_i)
@@ -464,8 +464,33 @@ class STM:
         neg_hess = hess_kminus1bykminus1 + self.siginv # at this point, the hessian is complete
 
         return neg_hess
-    
-    def invert_hessian(self, hess, hess_approx):
+    def make_pd(self, M):
+        """
+        Convert matrix X to be positive definite.
+
+        The following are necessary (but not sufficient) conditions for a Hermitian matrix A 
+        (which by definition has real diagonal elements a_(ii)) to be positive definite.
+
+        1. a_(ii)>0 for all i,
+        2. a_(ii)+a_(jj)>2|R[a_(ij)]| for i!=j,
+        3. The element with largest modulus lies on the main diagonal,
+        4. det(A)>0.
+
+        Returns: ValueError if matrix is not positive definite
+           """
+        dvec = M.diagonal()
+        magnitudes = np.sum(abs(M), 1) - abs(dvec)
+        # cholesky decomposition works only for symmetric and positive definite matrices
+        dvec = np.where(dvec < magnitudes,magnitudes,dvec)
+        # A Hermitian diagonally dominant matrix A with real non-negative diagonal entries is positive semidefinite. 
+        np.fill_diagonal(M, dvec)
+        #check if hermitian p.-d.
+        #Print the eigenvalues of the Matrix
+        #print(np.linalg.eigvalsh(M))
+        #if not np.all(np.linalg.eigvals(M)>0):
+        #    raise ValueError('The input matrix must be positive semidefinite')
+        return M
+    def invert_hessian(self, hess):
         """
         Invert hessian via cholesky decomposition 
         error -> not properly converged: make the matrix positive definite
@@ -474,11 +499,17 @@ class STM:
         try:  
             hess_inverse = np.linalg.cholesky(hess)
         except:
-            #hess = self.validate_positive_definitive(hess)
             try:
-                hess_inverse = np.linalg.cholesky(hess + 1e-12 * np.eye(hess.shape[0]))
-            except: 
-                hess_inverse = hess_approx
+                hess_inverse = np.linalg.cholesky(self.make_pd(hess))
+                print("converts Hessian via diagonal-dominance")
+            except:
+                hess_inverse = np.linalg.cholesky(self.make_pd(hess) + 1e-5 * np.eye(hess.shape[0]))
+                print("adds a small number to the hessian")
+            #hess = self.validate_positive_definitive(hess)
+            #
+     
+           # except: 
+            #    hess_inverse = hess_approx
         
         return hess_inverse
 
@@ -555,7 +586,7 @@ class NumpyEncoder(json.JSONEncoder):
 
 # Parameter Settings (required for simulation process)
 V=1000
-num_topics = 10
+num_topics = 30
 A = 2
 verbose = True
 interactions = False #settings.kappa
@@ -573,7 +604,7 @@ sigma_prior=0 #settings.sigma.prior
 # This leads to a dimension of the vocabulary << V
 np.random.seed(123)
 
-Corpus = CorpusCreation(n_topics=num_topics, n_docs=100, n_words=40, V=500, treatment=False, alpha='symmetric')
+Corpus = CorpusCreation(n_topics=num_topics, n_docs=1000, n_words=40, V=500, treatment=False, alpha='symmetric')
 Corpus.generate_documents()
 betaindex = np.concatenate([np.repeat(0,len(Corpus.documents)/2), np.repeat(1,len(Corpus.documents)/2)])
 
