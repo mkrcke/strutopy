@@ -109,6 +109,7 @@ class STM:
         dimension: N by K-1
         """
         self.eta = np.zeros((self.N, self.K-1))
+        #self.eta = random.gamma(.1,1,self.N * (self.K-1)).reshape(self.N, self.K-1)
 
     def init_kappa(self): 
         """
@@ -180,50 +181,26 @@ class STM:
     
         for i in range(self.N):
 
-            eta_extend = np.insert(self.eta[i], self.K-1, 0)
+            #eta_extend = np.insert(self.eta[i], self.K-1, 0)
 
             #set document specs
-            doc = self.documents[i] # TODO: Make documents a numpy array
-
-            doc_array = np.array(doc)
-
+            doc_array = np.array(self.documents[i])
             idx_1v = doc_array[:, 0] # This counts the first dimension of the numpy array, was "idx_1v"
             aspect = self.betaindex[i]
             beta_doc_kv = self.get_beta(idx_1v, aspect)
+            word_count_1v = doc_array[:, 1]
 
             assert np.all(beta_doc_kv >= 0), \
                 "Some entries of beta are negative.  Are you sure you didn't pass the logged version of beta?"
-
-            # This does not make sense.
-            # word_count_1v = np.array([y for x,y in doc]) #count of words in document
-            word_count_1v = doc_array[:, 1]
-            Ndoc = np.sum(word_count_1v)
-
-            # initial values
-            theta_1k = self.stable_softmax(eta_extend)
-
-            phi_vk = self.softmax_weights(eta_extend, beta_doc_kv)
             
             # optimize variational posterior
             # does not matter if we use optimize.minimize(method='BFGS') or optimize fmin_bfgs()
-
-            # x0 : ndarray, shape (n,)
-            #     Initial guess. Array of real elements of size (n,),
-            #     where ``n`` is the number of independent variables.
-            # args : tuple, optional
-
-            # We want to maximize f, but numpy only implements minimize, so we
-            # minimize -f
-            # word_count_1v, eta_long, beta_doc_kv, Ndoc, phi_vk, theta_1k, self.K-1
             res = self.optimize_eta(
                 eta=self.eta[i],
                 word_count=word_count_1v,
-                eta_extend=eta_extend,
-                beta_doc=beta_doc_kv,
-                Ndoc=Ndoc,
-                phi=phi_vk,
-                theta=theta_1k
+                beta_doc=beta_doc_kv
                 )
+            
             print(f"document {i}:", res.message)
             self.eta[i] = res.x
             
@@ -234,7 +211,7 @@ class STM:
             # 1) check if inverse is a legitimate cov matrix
             # 2) if not, adjust matrix to be positive definite 
             
-            hess_i = self.compute_hessian(eta = self.eta[i], word_count=word_count_1v, beta_doc_kv=beta_doc_kv)
+            hess_i = self.hessian(eta = self.eta[i], word_count=word_count_1v, beta_doc_kv=beta_doc_kv)
             L_i = self.decompose_hessian(hess_i)
 
             # Delta NU
@@ -253,7 +230,7 @@ class STM:
                 eta = self.eta[i],
                 beta_doc_kv=beta_doc_kv)
             
-            #print(bound_i)
+            print(bound_i)
 
             calculated_bounds.append(bound_i)
 
@@ -283,8 +260,8 @@ class STM:
         Returns:
             beta_doc_kv: topic-word distribution for a specific document, based on word indices and aspect
         """
-        if not np.all((self.beta >= 0)): 
-            raise ValueError("Some entries of beta are negative.")
+        #if not np.all((self.beta >= 0)): 
+            #raise ValueError("Some entries of beta are negative.")
         if self.interactions: 
             beta_doc_kv = self.beta[aspect][:,np.array(words)]
         else: 
@@ -400,71 +377,89 @@ class STM:
         exps = weight*np.exp(xshift)[:,None]
         return exps / np.sum(exps)
     
-    def optimize_eta(self, eta, word_count, eta_extend, beta_doc, Ndoc, phi, theta): 
+    def optimize_eta(self, eta, word_count, beta_doc): 
         """Optimizes the variational parameter eta given the likelihood and the gradient function
         """
-        def f(eta, word_count, eta_extend, beta_doc, Ndoc, phi, theta):
+        def f(eta, word_count, beta_doc):
             """objective for the variational update q(eta)
-            """
-            # precompute the difference since we use it twice
-            diff = (eta-self.mu)
-            #formula 
-            part1 = np.sum(word_count * (eta_extend.max() + np.log(np.exp(eta_extend - eta_extend.max())@beta_doc)))-Ndoc*scipy.special.logsumexp(eta)
-            part2 = -.5*diff.T@self.siginv@diff
-            return np.float32(part2 + part1)*(-1)
 
-        def df(eta, word_count, eta_extend, beta_doc, Ndoc, phi, theta):
+            Args:
+                eta (_type_): mean topic distribution of document d
+                word_count (_type_): count of words of document d
+                beta_doc (_type_): word-topic distribution for document d
+
+            Returns:
+                _type_: function value for the objective f()
+            """
+            eta_ = np.insert(eta, self.K-1, 0)
+            # from cpp implementation: 
+            # log(expeta * betas) * doc_cts - ndoc * log(sum(expeta))
+            part1 = np.dot(word_count,(eta_.max() + np.log(np.exp(eta_ - eta_.max())@beta_doc)))-np.sum(word_count)*scipy.special.logsumexp(eta_)
+            part2 = .5*(eta_[:-1]-self.mu).T@self.siginv@(eta_[:-1]-self.mu)
+            return np.float32(part2 - part1)
+        def df(eta, word_count, beta_doc):
             """gradient for the objective of the variational update q(etas)
             """
+            eta_ = np.insert(eta, self.K-1, 0)
             #formula
-            part1 = np.delete(np.sum(phi * word_count,axis=1) - Ndoc*theta, self.K-1)
-            part2 = self.siginv@(eta-self.mu) # Check here!!! for dimensions
-            return np.float32(part1 - part2)*(-1)
-        
-        # We want to maximize f, but numpy only implements minimize, so we
-        # minimize -f
+            part1 = np.delete(beta_doc @ (word_count/np.sum(beta_doc.T, axis=1)) - np.sum(word_count)/np.sum(np.exp(eta_)), self.K-1)
+            part2 = self.siginv@(eta_[:-1]-self.mu)
+            # We want to maximize f, but numpy only implements minimize, so we
+            # minimize -f
+            return np.float64(part2 - part1)
+
+        # def f(eta, word_count, beta_doc):
+        #     """objective for the variational update q(eta)
+        #     """
+        #     eta = np.insert(eta, self.K-1, 0)
+        #     #formula 
+        #     part1 = np.dot(word_count,(eta.max() + np.log(np.exp(eta - eta.max())@beta_doc)))-int(np.sum(word_count))*scipy.special.logsumexp(eta)
+        #     part2 = .5*(eta[:-1]-self.mu).T@self.siginv@(eta[:-1]-self.mu)
+        #     # We want to maximize f, but numpy only implements minimize, so we
+        #     # minimize -f
+        #     out = np.float32(part2 - part1)
+        #     return out
+
+        # def df(eta, word_count, beta_doc):
+        #     """gradient for the objective of the variational update q(etas)
+        #     """
+        #     eta = np.insert(eta, self.K-1, 0)
+            
+        #     #Ndoc = int(np.sum(word_count))
+        #     #theta = self.stable_softmax(eta)
+        #     #phi = self.softmax_weights(eta, beta_doc)
+        #     #formula
+        #     part1 = np.delete(beta_doc @ (word_count/np.sum(beta_doc.T, axis=1)) - np.sum(word_count)/np.sum(np.exp(eta)), self.K-1)
+        #     part2 = self.siginv@(eta[:-1]-self.mu)
+        #     # We want to maximize f, but numpy only implements minimize, so we
+        #     # minimize -f
+        #     out = np.float32(part2 - part1)
+        #     return out
         
         return optimize.minimize(
-            f, #TODO: negation of lhood
+            f, 
             x0=eta,
-            args=(word_count, eta_extend, beta_doc, Ndoc, phi, theta),
-            jac=df, #TODO: negation of grad
+            args=(word_count, beta_doc),
+            jac=df, 
             method="BFGS"
             )
+    
+    def hessian(self, eta, word_count, beta_doc_kv):
+        eta_ = np.insert(eta,self.K-1,0)
+        theta = self.stable_softmax(eta_)
 
-    def compute_hessian(self, eta, word_count, beta_doc_kv): 
-        """
-        computes hessian matrix for the variational distribution 
-        first, off diagonal values are computed.
-        diagonal values are replaced afterward
-        in the end, hessian should be positive definite
-        """
-        # off diagonal entries
-        eta_extend = np.insert(eta,len(eta),0)
-        theta = self.stable_softmax(eta_extend)
-        if not np.all((theta > 0) & (theta <= 1)): 
-            raise ValueError("values of theta not between 0 and 1")
-        expected_phi = self.softmax_weights(eta_extend, beta_doc_kv)
-        p1_offdiag = (np.sqrt(word_count)*expected_phi)@(np.sqrt(word_count)*expected_phi).T
-        # c.f. (theta * theta.t()); in the C++ implementation
-        # gives a K by K matrix 
-        p2_offdiag = sum(word_count)*theta[:,None]@theta[None,:]
+        a = np.multiply(beta_doc_kv.T, np.exp(eta_)).T # KxV
+        b = np.multiply(a, (np.sqrt(word_count) / np.sum(a, 0))) #KxV
+        c = np.multiply(b, np.sqrt(word_count).T) #KxV
 
-        #should be positive
-        neg_hess = p1_offdiag - p2_offdiag
+        hess = b @ b.T - np.sum(word_count)*np.multiply(theta,theta.T) # broadcasting, works fine
+        #difference to the c++ implementation comes from unspecified evaluation order: (+) instead of (-)
+        np.fill_diagonal(hess, np.diag(hess) - np.sum(c,axis=1) - np.sum(word_count) * theta) 
 
-        # diagonal entries
-        p1_diag = np.sum(np.multiply(np.multiply(np.sqrt(word_count), expected_phi), np.sqrt(word_count)), axis = 1)
-        p2_diag = sum(word_count)*theta
+        d = hess[:-1,:-1]
+        f = d + self.siginv
+        return f
 
-        #alter diagonal entries of the hessian
-        np.fill_diagonal(neg_hess, np.diag(neg_hess)-p1_diag - p2_diag) 
-        
-        hess_kminus1bykminus1 = neg_hess[:-1,:-1]
-        
-        neg_hess = hess_kminus1bykminus1 + self.siginv # at this point, the hessian is complete
-
-        return neg_hess
     def make_pd(self, M):
         """
         Convert matrix X to be positive definite.
@@ -486,12 +481,7 @@ class STM:
         # A Hermitian diagonally dominant matrix A with real non-negative diagonal entries is positive semidefinite. 
         np.fill_diagonal(M, dvec)
         return M
-<<<<<<< HEAD
     def decompose_hessian(self, hess):
-=======
-        
-    def invert_hessian(self, hess):
->>>>>>> cceec4b7e7f1da518b92fa95ef6286ad928870af
         """
         Decompose hessian via cholesky decomposition 
         error -> not properly converged: make the matrix positive definite
@@ -501,7 +491,6 @@ class STM:
             L = np.linalg.cholesky(hess)
         except:
             try:
-<<<<<<< HEAD
                 L = np.linalg.cholesky(self.make_pd(hess))
                 print("converts Hessian via diagonal-dominance")
             except:
@@ -509,14 +498,6 @@ class STM:
                 print("adds a small number to the hessian")
         
         return L
-=======
-                hess_inverse = np.linalg.cholesky(self.make_pd(hess))
-                #print("converts Hessian via diagonal-dominance")
-            except:
-                hess_inverse = np.linalg.cholesky(self.make_pd(hess) + 1e-5 * np.eye(hess.shape[0]))
-                #print("adds a small number to the hessian")
-        return hess_inverse
->>>>>>> cceec4b7e7f1da518b92fa95ef6286ad928870af
 
     def optimize_nu(self, L): 
         """Given the inverse hessian returns the variance-covariance matrix for the variational distribution
@@ -527,7 +508,7 @@ class STM:
         Returns:
             nu (np.array): variance-covariance matrix for the variational distribution q(eta|lambda, nu). 
         """
-        nu = np.linalg.inv(np.triu(L))
+        nu = np.linalg.inv(np.triu(L.T)) # watch out: L is already a lower triangular matrix!
         nu = nu@nu.T
         return nu
 
@@ -545,14 +526,13 @@ class STM:
             bound: evidence lower bound (E(...))
             phi: update for the variational latent parameter z TODO: disentangle the update for z from bound calculation
         """
-        eta_extend = np.insert(eta, len(eta), 0)
-        exp_eta_extend = np.exp(eta_extend)
-        theta = self.stable_softmax(eta_extend)
+        eta_=np.insert(eta, self.K-1, 0)
+        theta=self.stable_softmax(eta_)
         #compute 1/2 the determinant from the cholesky decomposition
         detTerm =  -np.sum(np.log(L.diagonal()))
         diff = eta-mu
         ############## generate the bound and make it a scalar ##################
-        beta_temp_kv = beta_doc_kv*exp_eta_extend[:,None]
+        beta_temp_kv = beta_doc_kv*np.exp(eta_)[:,None]
         bound = np.log(theta[None:,]@beta_temp_kv)@word_count + detTerm - .5*diff.T@self.siginv@diff - self.sigmaentropy
         return bound
     
@@ -590,7 +570,6 @@ class NumpyEncoder(json.JSONEncoder):
 # %%
 
 # Parameter Settings (required for simulation process)
-V=1000
 num_topics = 30
 A = 2
 verbose = True
@@ -609,7 +588,7 @@ sigma_prior=0 #settings.sigma.prior
 # This leads to a dimension of the vocabulary << V
 np.random.seed(123)
 
-Corpus = CorpusCreation(n_topics=num_topics, n_docs=1000, n_words=150, V=5000, treatment=False, alpha='asymmetric')
+Corpus = CorpusCreation(n_topics=num_topics, n_docs=1000, n_words=140, V=500, treatment=False, alpha='symmetric')
 Corpus.generate_documents()
 betaindex = np.concatenate([np.repeat(0,len(Corpus.documents)/2), np.repeat(1,len(Corpus.documents)/2)])
 
