@@ -192,10 +192,9 @@ class STM:
             try:
                 sigobj = np.linalg.cholesky(
                     self.sigma
-                )  # initialization of sigma not positive definite
+                )
                 self.sigmaentropy = np.sum(np.log(np.diag(sigobj)))
                 self.siginv = np.linalg.inv(sigobj).T * np.linalg.inv(sigobj)
-                break
             except:
                 print(
                     "Cholesky Decomposition failed, because Sigma is not positive definite!"
@@ -203,7 +202,7 @@ class STM:
                 self.sigmaentropy = (
                     0.5 * np.linalg.slogdet(self.sigma)[1]
                 )  # part 2 of ELBO
-                self.siginv = np.linalg.solve(self.sigma)  # part 3 of ELBO
+                self.siginv = np.linalg.cholesky(self.sigma)  # part 3 of ELBO
 
         # initialize sufficient statistics
         calculated_bounds = []
@@ -373,7 +372,7 @@ class STM:
                 )
                 print("saving model...")
                 self.save_model()
-                break
+                break 
 
     # _____________________________________________________________________
     def EM_is_converged(self, _iteration, convergence=None):
