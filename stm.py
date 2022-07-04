@@ -652,7 +652,6 @@ sigma_prior = 0  # settings.sigma.prior
 # This leads to a dimension of the vocabulary << V
 np.random.seed(123)
 
-<<<<<<< HEAD
 Corpus = CorpusCreation(
     n_topics=num_topics,
     n_docs=100,
@@ -661,9 +660,6 @@ Corpus = CorpusCreation(
     treatment=False,
     alpha="symmetric",
 )
-=======
-Corpus = CorpusCreation(n_topics=num_topics, n_docs=100, n_words=40, V=500, treatment=False, alpha='symmetric')
->>>>>>> af99741 (minor changes)
 Corpus.generate_documents()
 betaindex = np.concatenate(
     [np.repeat(0, len(Corpus.documents) / 2), np.repeat(1, len(Corpus.documents) / 2)]
