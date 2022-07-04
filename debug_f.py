@@ -32,6 +32,7 @@ def softmax_weights(x, weight):
     return exps / np.sum(exps)
 
 
+<<<<<<< HEAD
 def optimize_eta(eta, word_count, beta_doc_kv):
     def f(eta, word_count, beta_doc_kv):
         # precomputation
@@ -63,6 +64,33 @@ def optimize_eta(eta, word_count, beta_doc_kv):
         # minimize -f
         return np.float64(part2 - part1)
 
+=======
+def f(eta, word_count, beta_doc_kv):
+    # precomputation
+    eta_ = np.insert(eta, K-1, 0)
+    Ndoc = int(np.sum(word_count))
+    #formula 
+    # from cpp implementation: 
+    # log(expeta * betas) * doc_cts - ndoc * log(sum(expeta))
+    part1 = np.dot(word_count,(eta_.max() + np.log(np.exp(eta_ - eta_.max())@beta_doc_kv)))-Ndoc*scipy.special.logsumexp(eta_)
+    part2 = .5*(eta_[:-1]-mu).T@siginv@(eta_[:-1]-mu)
+    return np.float32(part2 - part1)
+
+def df(eta):
+    """gradient for the objective of the variational update q(etas)
+    """
+    # precomputation
+    eta_ = np.insert(eta, K-1, 0)
+    #formula
+    # part1 = np.delete(np.sum(phi * word_count,axis=1) - Ndoc*theta, K-1)
+    #part1 = np.delete(np.sum(phi * word_count,axis=1) - Ndoc*theta, K-1)
+    part1 = np.delete(beta_doc_kv @ (word_count/np.sum(beta_doc_kv.T, axis=1)) - np.sum(word_count)/np.sum(np.exp(eta_)), K-1)
+    part2 = siginv@(eta_[:-1]-mu)
+    # We want to maximize f, but numpy only implements minimize, so we
+    # minimize -f
+    return np.float64(part2 - part1)
+    
+>>>>>>> af99741 (minor changes)
     return optimize.minimize(
         f, x0=eta, args=(word_count, beta_doc_kv), jac=df, method="BFGS"
     )
@@ -161,8 +189,13 @@ def update_z(eta, beta_doc_kv, word_count):
 
 
 # compute values
+<<<<<<< HEAD
 f(eta)  # fixed
 df(eta)  # fixed
+=======
+f(eta, word_count, beta_doc_kv) # fixed
+df(eta) # fixed
+>>>>>>> af99741 (minor changes)
 optimize_eta(eta, word_count, beta_doc_kv)
 hess = hessian(eta)  # fixed
 L = decompose_hessian(hess)  # fixed
