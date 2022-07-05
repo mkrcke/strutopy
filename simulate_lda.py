@@ -6,7 +6,9 @@ from gensim.test.utils import common_texts
 from gensim.corpora.dictionary import Dictionary
 from gensim.models import LdaModel
 
-
+###################################################
+# Comparison
+https://gist.github.com/tmylk/b71bf7d3ec2f203bfce2
 ################# LDA #############################
 # https://github.com/RaRe-Technologies/gensim/blob/develop/gensim/models/ldamodel.py
 # Usage examples
