@@ -12,10 +12,10 @@ import csv
 K = 30
 V = 143
 word_count = np.ones(V)
-eta = np.zeros(K - 1)
-mu = np.zeros(K - 1)
+eta = np.zeros(K-1)
+mu = np.zeros(K-1)
 beta_doc_kv = pd.read_csv('np.txt', sep=" ", header=None).values
-sigma = np.zeros(((K - 1), (K - 1)))
+sigma = np.zeros(((K-1), (K-1)))
 np.fill_diagonal(sigma, 20)
 sigobj = np.linalg.cholesky(sigma)  # initialization of sigma not positive definite
 siginv = np.linalg.inv(sigobj).T * np.linalg.inv(sigobj)
@@ -28,9 +28,6 @@ def f(eta, word_count, beta_doc_kv):
     # formula
     # from cpp implementation:
     # log(expeta * betas) * doc_cts - ndoc * log(sum(expeta))
-    print(np.float64((0.5 * (eta[:-1] - mu).T @ siginv @ (eta[:-1] - mu)) - (np.dot(
-        word_count, eta.max() + np.log(np.exp(eta - eta.max()) @ beta_doc_kv))
-     - Ndoc * scipy.special.logsumexp(eta))))
     return np.float64((0.5 * (eta[:-1] - mu).T @ siginv @ (eta[:-1] - mu)) - (np.dot(
         word_count, eta.max() + np.log(np.exp(eta - eta.max()) @ beta_doc_kv))
      - Ndoc * scipy.special.logsumexp(eta)))
@@ -42,11 +39,8 @@ def df(eta, word_count, beta_doc_kv):
     # formula
     # part1 = np.delete(np.sum(phi * word_count,axis=1) - Ndoc*theta, K-1)
     # part1 = np.delete(np.sum(phi * word_count,axis=1) - Ndoc*theta, K-1)
-    return np.array(np.float64(siginv @ (eta[:-1] - mu)-np.delete(
-        beta_doc_kv @ (word_count / np.sum(beta_doc_kv.T, axis=1))
-        - np.sum(word_count) / np.sum(np.exp(eta)),
-        K - 1,
-    )))
+    return np.array(np.float64(siginv @ (eta[:-1] - mu)-(beta_doc_kv @ (word_count / np.sum(beta_doc_kv.T, axis=1))
+        - (np.sum(word_count) / np.sum(np.exp(eta)))*np.exp(eta))[:-1]))
     # We want to maximize f, but numpy only implements minimize, so we
     # minimize -f
     # print(part1)
@@ -207,34 +201,4 @@ def print_fun(x):
 
 optimize_eta(np.array(eta),  word_count, beta_doc_kv) # not fixed yet
 
-eta = np.insert(eta, K - 1, 0)
-
-def hessian(eta, word_count, beta_doc_kv):
-    eta_ = np.insert(eta, K - 1, 0)
-    theta = stable_softmax(eta_)
-
-    a = np.multiply(beta_doc_kv.T, np.exp(eta_)).T  # KxV
-    b = np.multiply(a, (np.sqrt(word_count) / np.sum(a, 0)))  # KxV
-    c = np.multiply(b, np.sqrt(word_count).T)  # KxV
-
-    hess = b @ b.T - np.sum(word_count) * np.multiply(
-        theta, theta.T
-    )  # broadcasting, works fine
-    # difference to the c++ implementation comes from unspecified evaluation order: (+) instead of (-)
-    np.fill_diagonal(
-        hess, np.diag(hess) - np.sum(c, axis=1) + np.sum(word_count) * theta
-    )
-
-    d = hess[:-1, :-1]
-    f = d + siginv
-    return f
-
 optimize.minimize(fun = f, x0=eta, args=(word_count, beta_doc_kv), jac=df, method="BFGS", options={'disp':True})
-
-
-def test_f(x): 
-    return x**2
-def test_df(x):
-    return 2*x
-
-optimize.minimize(fun=test_f, x0=4, jac=test_df)

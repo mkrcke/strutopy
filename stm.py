@@ -426,28 +426,22 @@ class STM:
             Returns:
                 _type_: function value for the objective f()
             """
-            eta_ = np.insert(eta, self.K - 1, 0)
+            # precomputation
+            eta = np.insert(eta, self.K - 1, 0)
+            Ndoc = int(np.sum(word_count))
+            # formula
             # from cpp implementation:
             # log(expeta * betas) * doc_cts - ndoc * log(sum(expeta))
-            part1 = np.dot(
-                word_count, (eta_.max() + np.log(np.exp(eta_ - eta_.max()) @ beta_doc))
-            ) - np.sum(word_count) * scipy.special.logsumexp(eta_)
-            part2 = 0.5 * (eta_[:-1] - self.mu).T @ self.siginv @ (eta_[:-1] - self.mu)
-            return np.float32(part2 - part1)
+            return np.float64((0.5 * (eta[:-1] - self.mu).T @ self.siginv @ (eta[:-1] - self.mu)) - (np.dot(
+                word_count, eta.max() + np.log(np.exp(eta - eta.max()) @ beta_doc))
+            - Ndoc * scipy.special.logsumexp(eta)))
 
         def df(eta, word_count, beta_doc):
             """gradient for the objective of the variational update q(etas)"""
-            eta_ = np.insert(eta, self.K - 1, 0)
+            eta = np.insert(eta, self.K - 1, 0)
             # formula
-            part1 = np.delete(
-                beta_doc @ (word_count / np.sum(beta_doc.T, axis=1))
-                - np.sum(word_count) / np.sum(np.exp(eta_)),
-                self.K - 1,
-            )
-            part2 = self.siginv @ (eta_[:-1] - self.mu)
-            # We want to maximize f, but numpy only implements minimize, so we
-            # minimize -f
-            return np.float64(part2 - part1)
+            return np.array(np.float64(self.siginv @ (eta[:-1] - self.mu)-(beta_doc @ (word_count / np.sum(beta_doc.T, axis=1))
+            - (np.sum(word_count) / np.sum(np.exp(eta)))*np.exp(eta))[:-1]))
 
         return optimize.minimize(
             f, x0=eta, args=(word_count, beta_doc), jac=df, method="BFGS"
