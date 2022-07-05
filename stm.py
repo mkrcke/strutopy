@@ -195,6 +195,7 @@ class STM:
                 )
                 self.sigmaentropy = np.sum(np.log(np.diag(sigobj)))
                 self.siginv = np.linalg.inv(sigobj).T * np.linalg.inv(sigobj)
+                break
             except:
                 print(
                     "Cholesky Decomposition failed, because Sigma is not positive definite!"
@@ -202,7 +203,7 @@ class STM:
                 self.sigmaentropy = (
                     0.5 * np.linalg.slogdet(self.sigma)[1]
                 )  # part 2 of ELBO
-                self.siginv = np.linalg.cholesky(self.sigma)  # part 3 of ELBO
+                self.siginv = scipy.linalg.cholesky(self.sigma)  # part 3 of ELBO
 
         # initialize sufficient statistics
         calculated_bounds = []
@@ -212,6 +213,7 @@ class STM:
         beta_ss = np.zeros(self.K * self.V).reshape(
             self.K, self.V
         )  # update after each document optimization
+        
         for i in range(self.N):
 
             # set document specs

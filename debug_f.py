@@ -2,20 +2,56 @@ import numpy as np
 import numpy.random as random
 import scipy
 from scipy import optimize
-
+import pandas as pd
+import matplotlib.pyplot as plt
 ### define input
+import csv
+
+
 # desired input: eta, fn, gr, doc_ct, mu=mu, siginv=siginv, beta_doc
 K = 30
 V = 143
 word_count = np.ones(V)
 eta = np.zeros(K - 1)
 mu = np.zeros(K - 1)
-beta_doc_kv = np.loadtxt("beta.csv")
+beta_doc_kv = pd.read_csv('np.txt', sep=" ", header=None).values
 sigma = np.zeros(((K - 1), (K - 1)))
 np.fill_diagonal(sigma, 20)
 sigobj = np.linalg.cholesky(sigma)  # initialization of sigma not positive definite
 siginv = np.linalg.inv(sigobj).T * np.linalg.inv(sigobj)
 sigmaentropy = np.sum(np.log(np.diag(sigobj)))
+
+def f(eta, word_count, beta_doc_kv):
+    # precomputation
+    eta = np.insert(eta, K - 1, 0)
+    Ndoc = int(np.sum(word_count))
+    # formula
+    # from cpp implementation:
+    # log(expeta * betas) * doc_cts - ndoc * log(sum(expeta))
+    print(np.float64((0.5 * (eta[:-1] - mu).T @ siginv @ (eta[:-1] - mu)) - (np.dot(
+        word_count, eta.max() + np.log(np.exp(eta - eta.max()) @ beta_doc_kv))
+     - Ndoc * scipy.special.logsumexp(eta))))
+    return np.float64((0.5 * (eta[:-1] - mu).T @ siginv @ (eta[:-1] - mu)) - (np.dot(
+        word_count, eta.max() + np.log(np.exp(eta - eta.max()) @ beta_doc_kv))
+     - Ndoc * scipy.special.logsumexp(eta)))
+
+def df(eta, word_count, beta_doc_kv):
+    """gradient for the objective of the variational update q(etas)"""
+    # precomputation
+    eta = np.insert(eta, K - 1, 0)
+    # formula
+    # part1 = np.delete(np.sum(phi * word_count,axis=1) - Ndoc*theta, K-1)
+    # part1 = np.delete(np.sum(phi * word_count,axis=1) - Ndoc*theta, K-1)
+    return np.array(np.float64(siginv @ (eta[:-1] - mu)-np.delete(
+        beta_doc_kv @ (word_count / np.sum(beta_doc_kv.T, axis=1))
+        - np.sum(word_count) / np.sum(np.exp(eta)),
+        K - 1,
+    )))
+    # We want to maximize f, but numpy only implements minimize, so we
+    # minimize -f
+    # print(part1)
+    # print(part2)
+    # return np.float64(part2 - part1)
 
 ### requirements
 def stable_softmax(x):
@@ -33,38 +69,34 @@ def softmax_weights(x, weight):
 
 
 def optimize_eta(eta, word_count, beta_doc_kv):
-    def f(eta, word_count, beta_doc_kv):
+    def f(eta,  word_count, beta_doc_kv):
         # precomputation
-        eta_ = np.insert(eta, K - 1, 0)
+        eta = np.insert(eta, K - 1, 0)
         Ndoc = int(np.sum(word_count))
-        # formula
-        # from cpp implementation:
-        # log(expeta * betas) * doc_cts - ndoc * log(sum(expeta))
         part1 = np.dot(
-            word_count, (eta_.max() + np.log(np.exp(eta_ - eta_.max()) @ beta_doc_kv))
-        ) - Ndoc * scipy.special.logsumexp(eta_)
-        part2 = 0.5 * (eta_[:-1] - mu).T @ siginv @ (eta_[:-1] - mu)
+            word_count, (eta.max() + np.log(np.exp(eta - eta.max()) @ beta_doc_kv))
+        ) - Ndoc * scipy.special.logsumexp(eta)
+        part2 = 0.5 * (eta[:-1] - mu).T @ siginv @ (eta[:-1] - mu)
+        print(part2 - part1)
         return np.float32(part2 - part1)
-
-    def df(eta, word_count, beta_doc_kv):
+    def df(eta,  word_count, beta_doc_kv):
         """gradient for the objective of the variational update q(etas)"""
         # precomputation
-        eta_ = np.insert(eta, K - 1, 0)
+        eta = np.insert(eta, K - 1, 0)
         # formula
-        # part1 = np.delete(np.sum(phi * word_count,axis=1) - Ndoc*theta, K-1)
-        # part1 = np.delete(np.sum(phi * word_count,axis=1) - Ndoc*theta, K-1)
         part1 = np.delete(
             beta_doc_kv @ (word_count / np.sum(beta_doc_kv.T, axis=1))
-            - np.sum(word_count) / np.sum(np.exp(eta_)),
+            - np.sum(word_count) / np.sum(np.exp(eta)),
             K - 1,
         )
-        part2 = siginv @ (eta_[:-1] - mu)
+        part2 = siginv @ (eta[:-1] - mu)
         # We want to maximize f, but numpy only implements minimize, so we
         # minimize -f
-        return np.float64(part2 - part1)
+        print(part2 - part1)
+        return (part2-part1)
 
     return optimize.minimize(
-        f, x0=eta, args=(word_count, beta_doc_kv), jac=df, method="BFGS"
+        f, x0=eta, args=(word_count, beta_doc_kv), jac=df, options={'maxiter': 500, 'gtol': 1e-5, 'eps':10},
     )
 
 
@@ -161,11 +193,48 @@ def update_z(eta, beta_doc_kv, word_count):
 
 
 # compute values
-f(eta)  # fixed
-df(eta)  # fixed
-optimize_eta(eta, word_count, beta_doc_kv)
+f(eta, word_count, beta_doc_kv)  # fixed
+df(eta, word_count, beta_doc_kv)  # fixed
 hess = hessian(eta)  # fixed
 L = decompose_hessian(hess)  # fixed
 lower_bound(L, eta)  # fixed
 optimize_nu(L)  # fixed
-update_z(eta, beta_doc_kv, word_count)  # not fixed for now
+update_z(eta, beta_doc_kv, word_count)  # fixed
+
+#test optimize
+def print_fun(x):
+    print("Current value: {}".format(x))
+
+optimize_eta(np.array(eta),  word_count, beta_doc_kv) # not fixed yet
+
+eta = np.insert(eta, K - 1, 0)
+
+def hessian(eta, word_count, beta_doc_kv):
+    eta_ = np.insert(eta, K - 1, 0)
+    theta = stable_softmax(eta_)
+
+    a = np.multiply(beta_doc_kv.T, np.exp(eta_)).T  # KxV
+    b = np.multiply(a, (np.sqrt(word_count) / np.sum(a, 0)))  # KxV
+    c = np.multiply(b, np.sqrt(word_count).T)  # KxV
+
+    hess = b @ b.T - np.sum(word_count) * np.multiply(
+        theta, theta.T
+    )  # broadcasting, works fine
+    # difference to the c++ implementation comes from unspecified evaluation order: (+) instead of (-)
+    np.fill_diagonal(
+        hess, np.diag(hess) - np.sum(c, axis=1) + np.sum(word_count) * theta
+    )
+
+    d = hess[:-1, :-1]
+    f = d + siginv
+    return f
+
+optimize.minimize(fun = f, x0=eta, args=(word_count, beta_doc_kv), jac=df, method="BFGS", options={'disp':True})
+
+
+def test_f(x): 
+    return x**2
+def test_df(x):
+    return 2*x
+
+optimize.minimize(fun=test_f, x0=4, jac=test_df)
