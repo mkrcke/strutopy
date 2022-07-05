@@ -322,9 +322,8 @@ class STM:
 
     def update_mu(self):
         """
-        updates the mean parameter for the logistic normal distribution
+        updates the mean parameter for the document specific logistic normal distribution
         """
-        # Short hack
         self.mu = np.mean(self.eta, axis=0)
 
     def update_sigma(self, nu, sigprior):
@@ -337,7 +336,7 @@ class STM:
         """
         # find the covariance
         covariance = (self.eta - self.mu).T @ (self.eta - self.mu)
-        sigma = (covariance + nu) / self.K - 1
+        sigma = (covariance + nu)/self.N
         self.sigma = np.diag(np.diag(sigma)) * sigprior + (1 - sigprior) * sigma
 
     def update_beta(self, beta_ss, kappa=None):
@@ -496,16 +495,16 @@ class STM:
         np.linalg.cholesky(a) requires the matrix a to be hermitian positive-definite
         """
         try:
-            L = np.linalg.cholesky(-1 * hess)
+            L = np.linalg.cholesky(hess)
             print("***")
         except:
             try:
-                L = np.linalg.cholesky(self.make_pd(-1 * hess))
+                L = np.linalg.cholesky(self.make_pd(ess))
                 print("converts Hessian via diagonal-dominance")
             except:
                 try:
                     L = scipy.linalg.cholesky(
-                        self.make_pd(hess) + 1e-5 * np.eye(-1 * hess.shape[0])
+                        self.make_pd(hess) + 1e-5 * np.eye(hess.shape[0])
                     )
                     print("adds a small number to the hessian")
                 except:
@@ -602,7 +601,7 @@ class NumpyEncoder(json.JSONEncoder):
 # %%
 
 # Parameter Settings (required for simulation process)
-num_topics = 20
+num_topics = 10
 A = 2
 verbose = True
 interactions = False  # settings.kappa
