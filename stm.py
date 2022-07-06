@@ -187,6 +187,7 @@ class STM:
             beta_ss: np.array of shape (k, v) but might need A
             bound: might be implemented as list len(#iterations)
         """
+        iter = 0
         # 2) Precalculate common components
         while True:
             try:
@@ -213,7 +214,7 @@ class STM:
         beta_ss = np.zeros(self.K * self.V).reshape(
             self.K, self.V
         )  # update after each document optimization
-        
+        t1 = time.process_time()
         for i in range(self.N):
 
             # set document specs
@@ -277,8 +278,13 @@ class STM:
         self.bound = np.sum(calculated_bounds)
         self.last_bounds.append(self.bound)
 
-        print(self.bound)
-
+        
+        print(f'Lower Bound: {self.bound}')
+        print(
+            "Completed E-Step in ({} seconds). \n".format(
+                math.floor((time.process_time() - t1))
+            )
+        )
         return beta_ss, sigma_ss
 
     def get_beta(self, words, aspect):
@@ -319,6 +325,7 @@ class STM:
                 math.floor((time.process_time() - t1))
             )
         )
+        print('___________________________________________________')
 
     def update_mu(self):
         """
@@ -356,6 +363,7 @@ class STM:
     def expectation_maximization(self):
         t1 = time.process_time()
         for _iteration in range(100):
+            print(f'________________Iteration:{_iteration}_____________________')
             beta_ss, sigma_ss = self.E_step()
             self.M_step(beta_ss, sigma_ss)
             if self.EM_is_converged(_iteration):
@@ -446,26 +454,6 @@ class STM:
             f, x0=eta, args=(word_count, beta_doc), jac=df, method="BFGS"
         )
 
-    def hessian(self, eta, word_count, beta_doc_kv):
-        eta_ = np.insert(eta, self.K - 1, 0)
-        theta = self.stable_softmax(eta_)
-
-        a = np.multiply(beta_doc_kv.T, np.exp(eta_)).T  # KxV
-        b = np.multiply(a, (np.sqrt(word_count) / np.sum(a, 0)))  # KxV
-        c = np.multiply(b, np.sqrt(word_count).T)  # KxV
-
-        hess = b @ b.T - np.sum(word_count) * np.multiply(
-            theta, theta.T
-        )  # broadcasting, works fine
-        # difference to the c++ implementation comes from unspecified evaluation order: (+) instead of (-)
-        np.fill_diagonal(
-            hess, np.diag(hess) - np.sum(c, axis=1) + np.sum(word_count) * theta
-        )
-
-        d = hess[:-1, :-1]
-        f = d + self.siginv
-        return f
-
     def make_pd(self, M):
         """
         Convert matrix X to be positive definite.
@@ -488,32 +476,62 @@ class STM:
         np.fill_diagonal(M, dvec)
         return M
 
+    def hessian(self, eta, word_count, beta_doc_kv):
+        eta_ = np.insert(eta, self.K - 1, 0)
+        theta = self.stable_softmax(eta_)
+        
+        a = np.transpose(np.multiply(np.transpose(beta_doc_kv), np.exp(eta_)))  # KxV
+        b = np.multiply(a, np.transpose(np.sqrt(word_count))) / np.sum(a, 0)  # KxV
+        c = np.multiply(b, np.transpose(np.sqrt(word_count)))  # KxV
+
+        hess = b @ b.T - np.sum(word_count) * np.multiply(
+            theta[:,None], theta[None,:]
+        )
+        assert self.check_symmetric(hess), 'Hessian is not symmetric'
+        # broadcasting, works fine
+        # difference to the c++ implementation comes from unspecified evaluation order: (+) instead of (-)
+        np.fill_diagonal(
+            hess, np.diag(hess) - np.sum(c, axis=1) + np.sum(word_count)*theta
+        )
+
+        d = hess[:-1, :-1]
+        f = d + self.siginv   
+        
+        if not np.all(np.linalg.eigvals(f)>0):
+            print('Hessian not positive definite. Introduce Diagonal Dominance...')
+            f = self.make_pd(f)
+
+        return f
+    
+    
+    def check_symmetric(self, M, rtol=1e-05, atol=1e-08):
+        return np.allclose(M, np.transpose(M), rtol=rtol, atol=atol)
+
+
     def decompose_hessian(self, hess, approx):
         """
         Decompose hessian via cholesky decomposition
+            - hessian needs to be symmetric and positive definite
         error -> not properly converged: make the matrix positive definite
         np.linalg.cholesky(a) requires the matrix a to be hermitian positive-definite
         """
+        
         try:
             L = np.linalg.cholesky(hess)
-            print("***")
         except:
             try:
-                L = np.linalg.cholesky(self.make_pd(ess))
+                L = np.linalg.cholesky(self.make_pd(hess))
                 print("converts Hessian via diagonal-dominance")
             except:
-                try:
-                    L = scipy.linalg.cholesky(
-                        self.make_pd(hess) + 1e-5 * np.eye(hess.shape[0])
-                    )
-                    print("adds a small number to the hessian")
-                except:
-                    L = approx
-                    print("___________hack______________")
+                L = scipy.linalg.cholesky(
+                    self.make_pd(hess) + 1e-5 * np.eye(hess.shape[0])
+                )
+                print("adds a small number to the hessian")
         return L
 
     def optimize_nu(self, L):
-        """Given the inverse hessian returns the variance-covariance matrix for the variational distribution
+        """Given the lower triangular of the decomposition of the hessian,
+        returns the variance-covariance matrix for the variational distribution: nu = inv(-hessian) = chol(-hessian) = L*L.T
 
         Args:
             L (np.array): lower triangular matrix of cholesky decomposition
@@ -524,7 +542,7 @@ class STM:
         nu = np.linalg.inv(
             np.triu(L.T)
         )  # watch out: L is already a lower triangular matrix!
-        nu = nu @ nu.T
+        nu = np.dot(nu,np.transpose(nu))
         return nu
 
     def lower_bound(self, L, mu, word_count, beta_doc_kv, eta):
@@ -539,7 +557,7 @@ class STM:
 
         Returns:
             bound: evidence lower bound (E(...))
-            phi: update for the variational latent parameter z TODO: disentangle the update for z from bound calculation
+            phi: update for the variational latent parameter z 
         """
         eta_ = np.insert(eta, self.K - 1, 0)
         theta = self.stable_softmax(eta_)
@@ -587,7 +605,7 @@ class STM:
             "settings": self.settings,
             "time_processed": self.time_processed,
         }
-        json.dump(model, open("stm_model.json", "w"), cls=NumpyEncoder)
+        json.dump(model, open("stm_model_2.json", "w"), cls=NumpyEncoder)
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -601,7 +619,7 @@ class NumpyEncoder(json.JSONEncoder):
 # %%
 
 # Parameter Settings (required for simulation process)
-num_topics = 10
+num_topics = 3
 A = 2
 verbose = True
 interactions = False  # settings.kappa
@@ -620,11 +638,11 @@ np.random.seed(123)
 
 Corpus = CorpusCreation(
     n_topics=num_topics,
-    n_docs=100,
-    n_words=50,
-    V=550,
+    n_docs=300,
+    n_words=100,
+    V=250,
     treatment=False,
-    alpha="symmetric",
+    alpha=np.array([0.2,0.6,0.2]),
 )
 Corpus.generate_documents()
 betaindex = np.concatenate(

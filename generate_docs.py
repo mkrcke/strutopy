@@ -116,7 +116,7 @@ class CorpusCreation:
             self.init_treatment(alpha_treatment)
 
     def init_treatment(self, alpha_treatment):
-        assert alpha_treatment is not None
+        assert alpha_treatment is not None, 'If treatment == True, the effect needs to be specified'
         if type(alpha_treatment) == np.ndarray:
             self.alpha_treatment = alpha_treatment
         else:
