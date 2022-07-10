@@ -634,10 +634,9 @@ class NumpyEncoder(json.JSONEncoder):
 
 
 # %% Init params for training _____________________
-# %%
 
 # Parameter Settings (required for simulation process)
-num_topics = 3
+num_topics = 10
 A = 2
 verbose = True
 interactions = False  # settings.kappa
@@ -660,7 +659,7 @@ Corpus = CorpusCreation(
     n_words=100,
     V=250,
     treatment=False,
-    alpha=np.array([0.01,0.01,10]),
+    alpha='symmetric',
 )
 Corpus.generate_documents()
 betaindex = np.concatenate(
@@ -668,66 +667,3 @@ betaindex = np.concatenate(
 )
 
 
-# Set starting values and parameters
-settings = {
-    "dim": {
-        "K": num_topics,  # number of topics
-        "V": len(Corpus.dictionary),  # number of words
-        "A": A,  # dimension of topical content
-        "N": len(Corpus.documents),
-    },
-    "verbose": verbose,
-    "kappa": {
-        "interactions": interactions,
-        "fixedintercept": True,
-        "contrats": False,
-        "mstep": {"tol": 0.01, "maxit": 5},
-    },
-    "tau": {
-        "mode": np.nan,
-        "tol": 1e-5,
-        "enet": 1,
-        "nlambda": 250,
-        "lambda.min.ratio": 0.001,
-        "ic.k": 2,
-        "maxit": 1e4,
-    },
-    "init": {
-        "mode": init_type,
-        "nits": 20,
-        "burnin": 25,
-        "alpha": 50 / num_topics,
-        "eta": 0.01,
-        "s": 0.05,
-        "p": 3000,
-    },
-    "convergence": {
-        "max.em.its": max_em_its,
-        "em.converge.thresh": emtol,
-        "allow.neg.change": True,
-    },
-    "covariates": {
-        "X": betaindex,
-        "betaindex": betaindex,
-        #     'yvarlevels':yvarlevels,
-        #     'formula': prevalence,
-    },
-    "gamma": {
-        "mode": "L1",  # needs to be set for the m-step (update mu in the topical prevalence model)
-        "prior": np.nan,  # sigma in the topical prevalence model
-        "enet": 1,  # regularization term
-        "ic.k": 2,  # information criterion
-        "maxits": 1000,
-    },
-    "sigma": {
-        "prior": 0,
-        "ngroups": ngroups,
-    },
-}
-
-
-# %%
-model = STM(settings, Corpus.documents, Corpus.dictionary)
-
-# %%
-model.expectation_maximization(saving=True)

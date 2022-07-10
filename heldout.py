@@ -27,22 +27,20 @@ import matplotlib.pyplot as plt
 import numpy as np 
 from stm import STM
 import pandas as pd
-# load model
-with open('stm_model_2.json') as f:
-    stm_model = json.load(f)
+from gensim.corpora.dictionary import Dictionary
+from generate_docs import CorpusCreation
 
-#%% 80/10/10 split
-corpus = stm_model['documents']
-test_split_idx = int(.8*len(corpus))
-validate_split_idx = int(.9*len(corpus)) 
+#%%
+def split_corpus(corpus, proportion=0.8): 
+  test_split_idx = int(proportion*len(corpus))
+  validate_split_idx = int((proportion+(1-proportion)/2)*len(corpus))
 
-#%% to array
+  train = np.array(corpus[:test_split_idx])
+  test = np.array(corpus[test_split_idx:validate_split_idx])
+  validate = np.array(corpus[validate_split_idx:])
 
-train = np.array(corpus[:test_split_idx])
-test = np.array(corpus[test_split_idx:validate_split_idx])
-validate = np.array(corpus[validate_split_idx:])
+  return train, test, validate
 
-#%% cut docs in half
 def cut_in_half(set):
   """function to split a set of documents in two parts
 
@@ -62,127 +60,157 @@ def cut_in_half(set):
 
   return first_half, second_half
 
-test_1, test_2 = cut_in_half(test)
-validate_1, validate_2 = cut_in_half(validate)
-
-#%% retrain stm using train + half of test 
-beta_train_corpus = np.concatenate((train, test))
-theta_train_corpus = np.concatenate((train, test_1))
-# update dictionary
-from gensim.corpora.dictionary import Dictionary
-dictionary = Dictionary.from_corpus(train_corpus)
-
-model_beta = STM(stm_model["settings"], beta_train_corpus, dictionary) 
-model_theta = STM(stm_model["settings"], theta_train_corpus, dictionary)
-model_beta.expectation_maximization(saving=False)
-model_theta.expectation_maximization(saving=False)
-
-#%% compute the likelihood for the remaining words in the test set
-# take beta from model trained on train + test set
-beta = np.array(model_beta.beta)
-# take theta from model trained on train + test_1 set
-theta = np.array(model_theta.lamda)
-
-doc_ll=[]
-for i,doc in enumerate(test_2):
-  word_ll = []
-  for word in doc:  
-    word_ll.append(word[1]*np.log(theta[i]@beta[:,word[0]]))
-  per_word_ll = np.sum(word_ll)/np.sum(np.array(doc)[:,1])
-  doc_ll.append(per_word_ll)
-
-print(doc_ll)
-#%% Compute likelihood for second half of the test set
-# somehow beta * theta
-# for each document, take beta and theta and take the dot product
-def compute_likelihood(document, beta, theta): 
-    pass
-#%%
-make.heldout <- function(documents, vocab, N=floor(.1*length(documents)), 
-                         proportion=.5, seed=NULL) {
-  if(!is.null(seed)) set.seed(seed)
+def eval_heldout(heldout, theta, beta):
+  doc_ll=[]
+  for i,doc in enumerate(heldout):
+    word_ll = []
+    for word in doc:  
+      word_ll.append(word[1]*np.log(theta[i]@beta[:,word[0]]))
+    per_word_ll = np.sum(word_ll)/np.sum(np.array(doc)[:,1])
+    doc_ll.append(per_word_ll)
   
-  # Convert the corpus to the internal STM format
-  args <- asSTMCorpus(documents, vocab)
-  documents <- args$documents
-  vocab <- args$vocab
-
-  index <- sort(sample(1:length(documents), N))
-  pie <- proportion
-  missing <- vector(mode="list", length=N)
-  ct <- 0
-  for(i in index) {
-    ct <- ct + 1
-    doc <- documents[[i]]  
-    if(ncol(doc)<2) next
-    doc <- rep(doc[1,], doc[2,])
-    #how many tokens to sample? The max ensures at least one is sampled
-    nsamp <- max(1,floor(pie*length(doc)))
-    ho.index <- sample(1:length(doc), nsamp)
-    tab <- tabulate(doc[ho.index])
-    missing[[ct]] <- rbind(which(tab>0), tab[tab>0])
-    tab <- tabulate(doc[-ho.index])
-    documents[[i]] <- rbind(which(tab>0), tab[tab>0])
-  }
-  missing <- list(index=index, docs=missing)
-  #check the vocab
-  indices <- sort(unique(unlist(lapply(documents, function(x) x[1,]))))
-
-  #all sorts of nonsense ensues if there is missingness
-  #first condition checks the vocab, second checks the documents
-  if(length(indices)!=length(vocab) | any(unlist(lapply(missing$docs, is.null)))) {
-    remove <- which(!(1:length(vocab)%in% indices))
-    newind <- rep(0, length(vocab))
-    newind[indices] <- 1:length(indices)
-    new.map <- cbind(1:length(vocab), newind)
-    #renumber the missing elements and remove 0's
-    missing$docs <- lapply(missing$docs, function(d) {
-      d[1,] <- new.map[match(d[1,], new.map[,1]),2]
-      return(d[,d[1,]!=0, drop=FALSE])
-    })
-    #apply the same process to the documents
-    documents <- lapply(documents, function(d) {
-      d[1,] <- new.map[match(d[1,], new.map[,1]),2]
-      return(d[,d[1,]!=0, drop=FALSE])
-    })
-    
-    lens <- unlist(lapply(missing$docs, length))
-    if(any(lens==0)) {
-      missing$docs <- missing$docs[lens!=0]
-      missing$index <- missing$index[lens!=0]
-    }
-    vocab <- vocab[indices]
-  }
-  #hooray.  return some stuff.
-  heldout <- list(documents=documents,vocab=vocab, missing=missing)
-
-  #you can get cases where these come out as non-integers...
-  #recast everything just to be sure.
-  heldout$documents <- lapply(heldout$documents, function(x) matrix(as.integer(x), nrow(x), ncol(x)))
-  heldout$missing$docs <- lapply(heldout$missing$docs, function(x) matrix(as.integer(x), nrow(x), ncol(x)))
-  class(heldout) <- "heldout"
-  return(heldout)
-}
-def make_heldout(): 
-    """Function to split a portion of documents into training and testing parts
-    as it is described in the Document Completion Method. 
-
-    Arguments
-    ----------------------------------------
-    documents: corpus containing the documents to create the heldout sets for 
-    vocab: 
-    N (default: floor(.1*length(documents))
-    proportion=.5
-    seed=NULL
-
-    Returns
-    ----------------------------------------
+  return doc_ll, np.mean(doc_ll)
 
 
-    """
-    pass
+def train_models(beta_train_corpus, theta_train_corpus, K):
+  settings["dim"]["K"] = K
+  # initialize dictionaries for different corpora
+  model_beta_dictionary = Dictionary.from_corpus(beta_train_corpus)
+  model_theta_dictionary = Dictionary.from_corpus(theta_train_corpus)
+  # initialize models
+  model_beta = STM(settings, beta_train_corpus, model_beta_dictionary) 
+  model_theta = STM(settings, theta_train_corpus, model_theta_dictionary)
+  # take beta from model trained on train + test set
+  model_beta.expectation_maximization(saving=False)
+  # take theta from model trained on train + half of test documents
+  model_theta.expectation_maximization(saving=False)
+
+  return np.array(model_beta.beta), np.array(model_theta.lamda)
+
+def heldout(corpus, K):
+  
+  train, test, validate = split_corpus(corpus, proportion=0.8)
+  test_1, test_2 = cut_in_half(test)
+  # validate_1, validate_2 = cut_in_half(validate)
+
+  beta_train_corpus = np.concatenate((train, test))
+  theta_train_corpus = np.concatenate((train, test_1))
+
+  beta, theta = train_models(beta_train_corpus, theta_train_corpus, K=K)
+  
+  doc_ll, expected_ll = eval_heldout(heldout=test_2, beta=beta, theta=theta)
+
+  return doc_ll, expected_ll
+
+
+def find_k(candidates, corpus, settings):
+  results=[]
+  for K in candidates:
+    _,expected_ll = heldout(corpus, K=K)
+    results.append(expected_ll)
+  
+  return results
 
 #%%
+Corpus = CorpusCreation(
+    n_topics=50,
+    n_docs=500,
+    n_words=50,
+    V=1500,
+    treatment=False,
+    alpha='symmetric',
+)
+Corpus.generate_documents()
+#%%
+# Set starting values and parameters
+# Parameter Settings (required for simulation process)
+num_topics = 10
+A = 2
+verbose = True
+interactions = False  # settings.kappa
+betaindex = np.concatenate(
+    [np.repeat(0, len(Corpus.documents) / 2), np.repeat(1, len(Corpus.documents) / 2)]
+)
 
-def evaluate_heldout(): 
-    pass 
+
+# Initialization and Convergence Settings
+init_type = "Random"  # settings.init
+ngroups = 1  # settings.ngroups
+max_em_its = 5  # settings.convergence
+emtol = 1e-5  # settings.convergence
+
+
+settings = {
+    "dim": {
+        "K": num_topics,  # number of topics
+        "V": len(Corpus.dictionary),  # number of words
+        "A": A,  # dimension of topical content
+        "N": len(Corpus.documents),
+    },
+    "verbose": verbose,
+    "kappa": {
+        "interactions": interactions,
+        "fixedintercept": True,
+        "contrats": False,
+        "mstep": {"tol": 0.01, "maxit": 5},
+    },
+    "tau": {
+        "mode": np.nan,
+        "tol": 1e-5,
+        "enet": 1,
+        "nlambda": 250,
+        "lambda.min.ratio": 0.001,
+        "ic.k": 2,
+        "maxit": 1e4,
+    },
+    "init": {
+        "mode": init_type,
+        "nits": 20,
+        "burnin": 25,
+        "alpha": 50 / num_topics,
+        "eta": 0.01,
+        "s": 0.05,
+        "p": 3000,
+    },
+    "convergence": {
+        "max.em.its": max_em_its,
+        "em.converge.thresh": emtol,
+        "allow.neg.change": True,
+    },
+    "covariates": {
+        "X": betaindex,
+        "betaindex": betaindex,
+        #     'yvarlevels':yvarlevels,
+        #     'formula': prevalence,
+    },
+    "gamma": {
+        "mode": "L1",  # needs to be set for the m-step (update mu in the topical prevalence model)
+        "prior": np.nan,  # sigma in the topical prevalence model
+        "enet": 1,  # regularization term
+        "ic.k": 2,  # information criterion
+        "maxits": 1000,
+    },
+    "sigma": {
+        "prior": 0,
+        "ngroups": ngroups,
+    },
+}
+
+
+# %%
+
+corpus = Corpus.documents
+candidates = np.array([3,10,30,50,100])
+results_k = find_k(candidates, corpus, settings)
+
+# %% plot
+fig, ax = plt.subplots()
+
+ax.scatter(candidates, results_k)
+
+
+plt.title("Held-out Likelihood for varying number of topics")
+plt.xlabel("Number of topics")
+plt.ylabel("Held-out Likelihood")
+plt.show()
+# %%

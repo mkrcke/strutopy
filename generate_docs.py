@@ -13,7 +13,7 @@ from random import betavariate
 import gensim
 import numpy as np
 
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from gensim.corpora.dictionary import Dictionary
 
 logger = logging.getLogger(__name__)
@@ -99,8 +99,6 @@ class CorpusCreation:
         self.init_theta(theta)
 
     def init_alpha(self, alpha, alpha_treatment, theta):
-        if not np.any(alpha): 
-            assert theta != None, 'Either alpha or theta needs to be specified for generating documents.'
         if type(alpha) == np.ndarray:
             self.alpha = alpha
         else:
@@ -113,6 +111,9 @@ class CorpusCreation:
                 )
             else:
                 self.alpha = np.repeat(alpha, self.K)
+        
+        if not np.any(self.alpha):
+            assert theta != None, 'Either alpha or theta needs to be specified for generating documents.'
 
         if self.treatment == True:
             self.init_treatment(alpha_treatment)
