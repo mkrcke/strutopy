@@ -94,11 +94,13 @@ class CorpusCreation:
         self.rng = np.random.default_rng(12345)
 
         # store user supplied probability distributions for words and documents
-        self.init_alpha(alpha, alpha_treatment)
+        self.init_alpha(alpha, alpha_treatment, theta)
         self.init_beta(beta)
         self.init_theta(theta)
 
-    def init_alpha(self, alpha, alpha_treatment):
+    def init_alpha(self, alpha, alpha_treatment, theta):
+        if not np.any(alpha): 
+            assert theta != None, 'Either alpha or theta needs to be specified for generating documents.'
         if type(alpha) == np.ndarray:
             self.alpha = alpha
         else:
@@ -126,11 +128,16 @@ class CorpusCreation:
                 self.alpha_treatment = np.exp(self.alpha)
 
     def init_beta(self, beta):
-        # initialize beforehand: beta is a global parameter, i.e. it does not change across documents
+        """2D numpy array containing the word-topic distribution
+
+        Args:
+            beta (nd.array): 2D-array of dimension K by V
+        """
         if beta == None:
             self.beta = self.rng.dirichlet(size=self.K, alpha=np.repeat(0.05, self.V))
         else:
-            self.beta = beta
+            self.beta = np.array(beta)            
+            assert type(self.beta) == np.ndarray, 'beta needs to be a 2D numpy array'
 
     def init_theta(self, theta):
         # theta is a document-level parameter, i.e. it does change across documents
@@ -147,7 +154,8 @@ class CorpusCreation:
                     alpha=self.alpha_treatment, size=int(self.n_docs / 2)
                 )
         else:
-            self.theta = theta
+            self.theta = np.array(theta)
+            assert type(self.theta) == np.ndarray, 'theta needs to be a 2D numpy array'
 
     def generate_documents(
         self, remove_terms=True, dictionary=True, display_props=False
@@ -184,7 +192,10 @@ class CorpusCreation:
 
     def get_probabilities(
         self,
-    ):  # TO-DO: adjust probabilities based on nonlinear covariate effects
+    ):
+        """define probability vectors for the multinomial word draws
+        """
+    # TO-DO: adjust probabilities based on nonlinear covariate effects
         if self.treatment == False:
             self.p = self.theta @ self.beta
         else:

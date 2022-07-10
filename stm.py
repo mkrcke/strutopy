@@ -72,6 +72,7 @@ class STM:
         self.init_eta()
         self.init_sigma()
         self.init_kappa()
+        self.init_lamda()
 
     def init_beta(self):
         """Beta has shape str(self.K, self.V))"""
@@ -108,13 +109,20 @@ class STM:
     def init_sigma(self):
         self.sigma = np.zeros(((self.K - 1), (self.K - 1)))
         np.fill_diagonal(self.sigma, 20)
+    
 
     def init_eta(self):
         """
         dimension: N by K-1
         """
         self.eta = np.zeros((self.N, self.K - 1))
-        # self.eta = random.gamma(.1,1,self.N * (self.K-1)).reshape(self.N, self.K-1)
+
+    def init_lamda(self):
+        """document level parameter to store the mean variational parameters
+        based on the numerical optimization and the log additive transformation.
+        dimension: N by K
+        """
+        self.lamda = np.zeros((self.N, self.K))
 
     def init_kappa(self):
         """
@@ -238,7 +246,7 @@ class STM:
 
             # print(f"document {i}:", res.message)
             self.eta[i] = res.x
-
+            self.lamda[i] = np.exp(np.insert(res.x, self.K-1, 0)) / np.sum(np.exp(np.insert(res.x, self.K-1, 0)))
             # Compute Hessian, Phi and Lower Bound
             # 1) check if inverse is a legitimate cov matrix
             # 2) if not, adjust matrix to be positive definite
@@ -329,7 +337,7 @@ class STM:
 
     def update_mu(self):
         """
-        updates the mean parameter for the document specific logistic normal distribution
+        updates the mean parameter for the [document specific] logistic normal distribution
         """
         self.mu = np.mean(self.eta, axis=0)
 
@@ -360,7 +368,7 @@ class STM:
         else:
             print(f"implementation for {kappa} is missing")
 
-    def expectation_maximization(self):
+    def expectation_maximization(self, saving):
         t1 = time.process_time()
         for _iteration in range(100):
             print(f'________________Iteration:{_iteration}_____________________')
@@ -371,16 +379,18 @@ class STM:
                 print(
                     f"model converged in iteration {_iteration} after {self.time_processed}s"
                 )
-                print("saving model...")
-                self.save_model()
+                if saving == True: 
+                    print("saving model...")
+                    self.save_model()
                 break
             if self.max_its_reached(_iteration):
                 self.time_processed = time.process_time() - t1
                 print(
                     f"maximum number of iterations ({max_em_its}) reached after {self.time_processed} seconds"
                 )
-                print("saving model...")
-                self.save_model()
+                if saving == True: 
+                    print("saving model...")
+                    self.save_model()
                 break 
 
     # _____________________________________________________________________
@@ -604,6 +614,8 @@ class STM:
             "beta": self.beta,
             "settings": self.settings,
             "time_processed": self.time_processed,
+            "lambda":self.lamda,
+            "documents": self.documents,
         }
         json.dump(model, open("stm_model_2.json", "w"), cls=NumpyEncoder)
 
@@ -612,6 +624,12 @@ class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating): 
+            return float(obj)
+        elif isinstance(obj, np.floating): 
+            return float(obj)
         return json.JSONEncoder.default(self, obj)
 
 
@@ -638,11 +656,11 @@ np.random.seed(123)
 
 Corpus = CorpusCreation(
     n_topics=num_topics,
-    n_docs=300,
+    n_docs=100,
     n_words=100,
     V=250,
     treatment=False,
-    alpha=np.array([0.2,0.6,0.2]),
+    alpha=np.array([0.01,0.01,10]),
 )
 Corpus.generate_documents()
 betaindex = np.concatenate(
@@ -709,10 +727,7 @@ settings = {
 
 
 # %%
-
 model = STM(settings, Corpus.documents, Corpus.dictionary)
 
-
 # %%
-
-model.expectation_maximization()
+model.expectation_maximization(saving=True)
