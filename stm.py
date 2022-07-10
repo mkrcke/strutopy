@@ -55,6 +55,8 @@ class STM:
         self.V = self.settings["dim"]["V"]  # Number of words
         self.K = self.settings["dim"]["K"]  # Number of topics
         self.A = self.settings["dim"]["A"]  # TODO: when data changes ...
+        self.covar = settings["covariates"]["X"]
+        self.enet = settings["tau"]["enet"]
         self.N = len(self.documents)
         self.interactions = settings["kappa"]["interactions"]
         self.betaindex = settings["covariates"]["betaindex"]
@@ -123,6 +125,13 @@ class STM:
         dimension: N by K
         """
         self.lamda = np.zeros((self.N, self.K))
+
+    def init_gamma(self): 
+        """The prior specification for the topic prevalence parameters is a zero mean Gaussian distribution with shared variance parameter,
+        gamma_p,k ~ N(0,sigma_k^2)
+        sigma_k^2 ~ InverseGamma(a,b), with a & b fixed
+        """
+        self.gamma = np.zeros(self.A, self.K) 
 
     def init_kappa(self):
         """
@@ -335,11 +344,32 @@ class STM:
         )
         print('___________________________________________________')
 
-    def update_mu(self):
+    def update_mu(self, mode = "CTM"):
         """
         updates the mean parameter for the [document specific] logistic normal distribution
         """
-        self.mu = np.mean(self.eta, axis=0)
+        if mode == "CTM":
+            assert self.A < 2, 'Uses column means for the mean, since no covariates are specified.'
+            self.mu = np.mean(self.eta, axis=0)
+         
+        # mode = L1 simplest method requires only glmnet (https://cran.r-project.org/web/packages/glmnet/index.html)
+        elif mode == "L1":
+            #prepare covariate matrix for modeling 
+            try:
+                covar = self.covar.astype('category')
+            except:
+                pass
+            covar2D = np.array(self.covar)[:,None] #prepares 1D array for one-hot encoding (OHE) by making it 2D
+            enc = OneHotEncoder(handle_unknown='ignore') #create OHE
+            covarOHE = enc.fit_transform(covar2D).toarray() #fit OHE
+            linear_model = sklearn.linear_model.Lasso(alpha=enet)
+            fitted_model = linear_model.fit(covarOHE,self.lambd)
+            self.gamma = np.insert(fitted_model.coef_, 0, fitted_model.intercept_).reshape(self.K-1,3)
+            design_matrix = np.c_[ np.ones(covarOHE.shape[0]), covarOHE]
+            self.mu = design_matrix@self.gamma.T
+        else: 
+            raise ValueError('Updating the topical prevalence parameter requires a mode. Choose from "CTM", "Pooled" or "L1" (default).')
+    
 
     def update_sigma(self, nu, sigprior):
         """
