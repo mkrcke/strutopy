@@ -9,6 +9,7 @@ import time
 
 import numpy as np
 import numpy.random as random
+from pandas import Series
 import scipy
 import sklearn.linear_model
 from scipy import optimize
@@ -288,9 +289,9 @@ class STM:
             sigma_ss += nu
             # TODO: combine into one
             if self.interactions:
-                beta_ss[aspect][:, np.array(idx_1v)] += phi
+                beta_ss[aspect][:, np.array(np.int0(idx_1v))] += phi
             else:
-                beta_ss[:, np.array(idx_1v)] += phi
+                beta_ss[:, np.array(np.int0(idx_1v))] += phi
 
         self.bound = np.sum(calculated_bounds)
         self.last_bounds.append(self.bound)
@@ -322,7 +323,7 @@ class STM:
         if self.interactions:
             beta_doc_kv = self.beta[aspect][:, np.array(words)]
         else:
-            beta_doc_kv = self.beta[:, np.array(words)]
+            beta_doc_kv = self.beta[:, np.array(np.int0(words))]
         return beta_doc_kv
 
     # _____________________________________________________________________
@@ -349,7 +350,7 @@ class STM:
         updates the mean parameter for the [document specific] logistic normal distribution
         """
         if mode == "CTM":
-            assert self.A < 2, 'Uses column means for the mean, since no covariates are specified.'
+            #assert self.A < 2, 'Uses column means for the mean, since no covariates are specified.'
             self.mu = np.mean(self.eta, axis=0)
          
         # mode = L1 simplest method requires only glmnet (https://cran.r-project.org/web/packages/glmnet/index.html)
@@ -642,12 +643,12 @@ class STM:
             "mu": self.mu,
             "sigma": self.sigma,
             "beta": self.beta,
-            "settings": self.settings,
+            #"settings": self.settings,
             "time_processed": self.time_processed,
             "lambda":self.lamda,
             "documents": self.documents,
         }
-        json.dump(model, open("stm_model_2.json", "w"), cls=NumpyEncoder)
+        json.dump(model, open("model.json", "w"), cls=NumpyEncoder)
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -660,6 +661,8 @@ class NumpyEncoder(json.JSONEncoder):
             return float(obj)
         elif isinstance(obj, np.floating): 
             return float(obj)
+        elif isinstance(obj, Series):
+            return obj.to_json()
         return json.JSONEncoder.default(self, obj)
 
 
