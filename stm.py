@@ -700,3 +700,5 @@ betaindex = np.concatenate(
 )
 
 
+
+# %%
