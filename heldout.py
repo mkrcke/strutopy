@@ -17,8 +17,8 @@
 
 # Requirements. 
 ## STM.expectation_maximization() returns the document-level mean posterior values (theta, beta) - CHECK 
-## A function that can split the corpus into test, train and validate
-## We can introduce fitted parameters (theta, beta) into the document for computing the heldout-likelihood. 
+## A function that can split the corpus into test, train and validate - CHECK 
+## We can introduce fitted parameters (theta, beta) into the document for computing the heldout-likelihood - CHECK
 
 
 #%% Load packages and model
