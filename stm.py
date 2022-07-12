@@ -17,7 +17,7 @@ from sklearn.preprocessing import OneHotEncoder
 
 # from stm import STM
 from generate_docs import CorpusCreation
-from spectral_initialisation import spectral_init
+#from spectral_initialisation import spectral_init
 
 # custom packages
 
@@ -31,9 +31,9 @@ logger = logging.getLogger(__name__)
 class STM:
     def __init__(self, settings, documents, dictionary, dtype=np.float32):
         """
-        @param: settings
+        @param: settings (c.f. large dictionary TODO: create settings file)
         @param: documents BoW-formatted documents in list of list of arrays with index-count tuples for each word
-                example: `[[(1,3),(3,2)],[(1,1),(4,2)]]`
+                example: `[[(1,3),(3,2)],[(1,1),(4,2)]]` -> [list of (int, int)]
         @param: dictionary contains word-indices of the corpus
         @param: (default=np.float32) dtype used for value checking along the process
 
@@ -63,7 +63,9 @@ class STM:
         self.settings = settings
         self.documents = documents
         self.dictionary = dictionary
-        
+        # TODO: create a document term matrix (D x V) that is required for the spectral initialisation
+        #self.doc_term_matrix = 
+
         self.init = settings['init']['mode']
         
         # test and store user-supplied parameters
@@ -108,7 +110,7 @@ class STM:
         """
         if self.init=='spectral':
             self.beta = spectral_init(self.doc_term_matrix, self.K, maxV=10000)
-        else:
+        elif self.init=='random':
             beta_init = random.gamma(0.1, 1, self.V * self.K).reshape(self.K, self.V)
             beta_init_normalized = beta_init / np.sum(beta_init, axis=1)[:, None]
             if self.interactions:  # TODO: replace ifelse condition by logic
@@ -731,3 +733,6 @@ betaindex = np.concatenate(
 
 
 # %%
+for doc in Corpus.documents:
+    word_idx = np.array(doc)[0]
+    word_count = np.array(doc)[1]

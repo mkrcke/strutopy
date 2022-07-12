@@ -2,10 +2,10 @@ import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
 from qpsolvers import solve_qp
-from scipy.sparse import diags, csr_matrix, csr_array
+from scipy.sparse import diags, csr_matrix, csr_array, coo_matrix
 from sklearn.preprocessing import normalize
 
-def spectral_init(doc_term_matrix, K, maxV=None, verbose=True, print_anchor=False):
+def spectral_init(corpus, K, maxV=None, verbose=True, print_anchor=False):
     """
     init='spectral' provides a deterministic initialization using the
     spectral algorithm given in Arora et al 2014.  See Roberts, Stewart and
@@ -18,7 +18,7 @@ def spectral_init(doc_term_matrix, K, maxV=None, verbose=True, print_anchor=Fals
     
     Numerical instabilities might occur (c.f. https://github.com/bstewart/stm/issues/133)
     
-    @param: doc_term_matrix: matrix with absolute word counts per document (D x V)
+    @param: corpus in bag-of-word format -> [list of (int, int)]
     @param: K number of topics used for the spectral initialisation
     @param: (default=10000) maxV maximum number of most frequent terms used for spectral initialisation
     @param: verbose if True prints information as it progresses.
@@ -26,9 +26,12 @@ def spectral_init(doc_term_matrix, K, maxV=None, verbose=True, print_anchor=Fals
 
     @return: word-topic distribution obtained from spectral learning (V X K)
     """ 
+    doc_term_matrix = doc_term_matrix(corpus=corpus)
+
     wprob = np.sum(doc_term_matrix, axis=0)
     wprob = wprob/np.sum(wprob) 
     wprob = np.array(wprob).flatten()
+
 
     if verbose: print("Create gram matrix...")
     Q = gram(doc_term_matrix)
@@ -46,14 +49,48 @@ def spectral_init(doc_term_matrix, K, maxV=None, verbose=True, print_anchor=Fals
 
     return beta
 
+def doc_term_matrix(corpus):
+    """
+    Create a sparse coo_matrix constructed from three arrays:
+    
+    - data[:] word counts: the entries of the matrix, in any order
+    - i[:] document index: the row indices of the matrix entries
+    - j[:] word index: the column indices of the matrix entries
+
+    @param: corpus in bag-of-word format -> [list of (int, int)]
+        corpus (list): list containing word indices and word counts per document
+
+    @return: doc_term_matrix sparse matrix with document-term counts in coo format
+    """
+
+    word_idx = []
+    for doc in corpus: 
+        for word in doc:
+            word_idx.append(word[0])
+    word_idx = np.array(word_idx)
+
+    doc_idx = []
+    for i, doc in enumerate(corpus): 
+        for word in doc:
+            doc_idx.append(i)
+    doc_idx = np.array(doc_idx)
+
+    count = []
+    for doc in corpus: 
+        for word in doc:
+            count.append(word[1])
+    count = np.array(count)
+
+    return csr_matrix((count, (doc_idx, word_idx)))
+
 def gram(doc_term_matrix): 
     """"
     Computes a square matrix Q from the document term matrix. 
     Values of Q are row normalized. 
     
     Note: scipy.sparse matrix features are used to improve computation time
-
-    @param: mat document_term_matrix (D x V) in sparse csr format
+    
+    @param: doc_term_matrix (D x V) in sparse csr format
 
     @return: sparse row-normalized matrix Q (VxV) in sparse csr format
     """
@@ -199,14 +236,13 @@ def recover_l2(Q, anchor, wprob):
     return A
  
 
+############ TESTING ######################
+# data = pd.read_csv('data/poliblogs2008.csv')
+# # selection for quick testing (make sure it is in line with R selection)
+# data = data[:100]
+# # use the count vectorizer to get absolute word counts
+# vectorizer = CountVectorizer()
+# doc_term_matrix = vectorizer.fit_transform(data.documents)
+# K=10
+# beta = spectral_init(doc_term_matrix, maxV=None, verbose=True, K=K)
 
-#%% raw documents
-data = pd.read_csv('data/poliblogs2008.csv')
-# selection for quick testing (make sure it is in line with R selection)
-data = data[:100]
-# use the count vectorizer to get absolute word counts
-vectorizer = CountVectorizer()
-doc_term_matrix = vectorizer.fit_transform(data.documents)
-K=10
-
-beta = spectral_init(doc_term_matrix, maxV=None, verbose=True, K=K)

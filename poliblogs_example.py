@@ -34,7 +34,7 @@ A = len(set(betaindex))
 interactions = False #settings.kappa
 verbose = True
 
-init_type = "Random" #settings.init
+init_type = "random" #settings.init
 ngroups = 1 #settings.ngroups
 max_em_its = 5 #settings.convergence
 emtol = 1e-5 #settings.convergence
