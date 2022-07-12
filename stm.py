@@ -22,7 +22,7 @@ from spectral_initialisation import spectral_init
 logger = logging.getLogger(__name__)
 
 class STM:
-    def __init__(self, settings, documents, dictionary, dtype=np.float32):
+    def __init__(self, settings, documents, dictionary, dtype=np.float32, init='spectral'):
         """
         @param: settings (c.f. large dictionary TODO: create settings file)
         @param: documents BoW-formatted documents in list of list of arrays with index-count tuples for each word
@@ -56,10 +56,7 @@ class STM:
         self.settings = settings
         self.documents = documents
         self.dictionary = dictionary
-        # TODO: create a document term matrix (D x V) that is required for the spectral initialisation
-        #self.doc_term_matrix = 
-
-        self.init = settings['init']['mode']
+        self.init = init
         
         # test and store user-supplied parameters
         if len(documents) is None:
@@ -78,12 +75,15 @@ class STM:
         self.interactions = settings["kappa"]["interactions"]
         self.betaindex = settings["covariates"]["betaindex"]
 
+        # convergence settings
         self.last_bounds = []
+        self.max_em_its = settings["convergence"]["max.em.its"]
 
-        self.init_global_params()  # Think about naming. Are these global params?
+        # initialise 
+        self.init_params()
 
     # _____________________________________________________________________
-    def init_global_params(self):
+    def init_params(self):
         """initialises global parameters beta, mu, eta, sigma and kappa"""
         # Set global params
         self.init_beta()
@@ -124,9 +124,10 @@ class STM:
         assert self.beta.shape == (
             self.K,
             self.V,
-        ), "Invalid beta shape. Got shape %s, but expected %s" % (
+        ), "Invalid beta shape. Got shape %s, but expected (%s, %s)" % (
             str(self.beta.shape),
-            str(self.K, self.V),
+            str(self.K),
+            str(self.V),
         )
 
     # TODO: Check for the shape of mu if this is correct
@@ -441,7 +442,7 @@ class STM:
             if self.max_its_reached(_iteration):
                 self.time_processed = time.process_time() - t1
                 print(
-                    f"maximum number of iterations ({max_em_its}) reached after {self.time_processed} seconds"
+                    f"maximum number of iterations ({self.max_em_its}) reached after {self.time_processed} seconds"
                 )
                 if saving == True: 
                     print("saving model...")
@@ -466,7 +467,7 @@ class STM:
             return False
 
     def max_its_reached(self, _iteration):
-        if _iteration == max_em_its - 1:
+        if _iteration == self.max_em_its - 1:
             return True
         else:
             _iteration += 1

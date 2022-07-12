@@ -24,9 +24,9 @@ def spectral_init(corpus, K, maxV=None, verbose=True, print_anchor=False):
     @param: verbose if True prints information as it progresses.
     @param: (default=False) print_anchor words from input documents
 
-    @return: word-topic distribution obtained from spectral learning (V X K)
+    @return: word-topic distribution obtained from spectral learning (K X V)
     """ 
-    doc_term_matrix = doc_term_matrix(corpus=corpus)
+    doc_term_matrix = create_dtm(corpus=corpus)
 
     wprob = np.sum(doc_term_matrix, axis=0)
     wprob = wprob/np.sum(wprob) 
@@ -47,9 +47,9 @@ def spectral_init(corpus, K, maxV=None, verbose=True, print_anchor=False):
         print('Recover values for beta')
     beta = recover_l2(Q, anchor, wprob)
 
-    return beta
+    return beta.T
 
-def doc_term_matrix(corpus):
+def create_dtm(corpus):
     """
     Create a sparse coo_matrix constructed from three arrays:
     
