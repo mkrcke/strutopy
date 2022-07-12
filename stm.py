@@ -15,18 +15,11 @@ import sklearn.linear_model
 from scipy import optimize
 from sklearn.preprocessing import OneHotEncoder
 
-# from stm import STM
-from generate_docs import CorpusCreation
-#from spectral_initialisation import spectral_init
-
 # custom packages
-
+from generate_docs import CorpusCreation
+from spectral_initialisation import spectral_init
 
 logger = logging.getLogger(__name__)
-
-
-# %%
-
 
 class STM:
     def __init__(self, settings, documents, dictionary, dtype=np.float32):
@@ -109,7 +102,7 @@ class STM:
                 * matrix of shape (num_topics, num_words) to assign a probability for each word-topic combination.
         """
         if self.init=='spectral':
-            self.beta = spectral_init(self.doc_term_matrix, self.K, maxV=10000)
+            self.beta = spectral_init(self.documents, self.K, maxV=10000)
         elif self.init=='random':
             beta_init = random.gamma(0.1, 1, self.V * self.K).reshape(self.K, self.V)
             beta_init_normalized = beta_init / np.sum(beta_init, axis=1)[:, None]
@@ -696,43 +689,3 @@ class NumpyEncoder(json.JSONEncoder):
             return obj.to_json()
         return json.JSONEncoder.default(self, obj)
 
-
-# %% Init params for training _____________________
-
-# Parameter Settings (required for simulation process)
-num_topics = 10
-A = 2
-verbose = True
-interactions = False  # settings.kappa
-
-# Initialization and Convergence Settings
-init_type = "Random"  # settings.init
-ngroups = 1  # settings.ngroups
-max_em_its = 30  # settings.convergence
-emtol = 1e-5  # settings.convergence
-
-
-# Here we are simulating 100 documents with 100 words each. We are sampling from a multinomial distribution with dimension V.
-# Note however that we will discard all elements from the vector V that do not occur.
-# This leads to a dimension of the vocabulary << V
-np.random.seed(123)
-
-Corpus = CorpusCreation(
-    n_topics=num_topics,
-    n_docs=100,
-    n_words=100,
-    V=250,
-    treatment=False,
-    alpha='symmetric',
-)
-Corpus.generate_documents()
-betaindex = np.concatenate(
-    [np.repeat(0, len(Corpus.documents) / 2), np.repeat(1, len(Corpus.documents) / 2)]
-)
-
-
-
-# %%
-for doc in Corpus.documents:
-    word_idx = np.array(doc)[0]
-    word_count = np.array(doc)[1]
