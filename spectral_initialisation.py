@@ -1,5 +1,3 @@
-
-#%%
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
@@ -18,8 +16,7 @@ def spectral_init(doc_term_matrix, K, maxV=None, verbose=True, print_anchor=Fals
     number of terms can be adjusted via the @param maxV. Note that the computation
     complexity increases on the magnitude of n^2.
     
-    Numerical instabilities might occur.
-    Check https://github.com/bstewart/stm/issues/133 for a longer explanation. 
+    Numerical instabilities might occur (c.f. https://github.com/bstewart/stm/issues/133)
     
     @param: doc_term_matrix: matrix with absolute word counts per document (D x V)
     @param: K number of topics used for the spectral initialisation

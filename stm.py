@@ -17,6 +17,7 @@ from sklearn.preprocessing import OneHotEncoder
 
 # from stm import STM
 from generate_docs import CorpusCreation
+from spectral_initialisation import spectral_init
 
 # custom packages
 
@@ -30,11 +31,29 @@ logger = logging.getLogger(__name__)
 class STM:
     def __init__(self, settings, documents, dictionary, dtype=np.float32):
         """
-        beta : {float, numpy.ndarray of float, list of float, str}, optional
-        A-priori belief on topic-word distribution, this can be:
-            * scalar for a symmetric prior over topic-word distribution,
-            * 1D array of length equal to num_words to denote an asymmetric user defined prior for each word,
-            * matrix of shape (num_topics, num_words) to assign a probability for each word-topic combination.
+        @param: settings
+        @param: documents BoW-formatted documents in list of list of arrays with index-count tuples for each word
+                example: `[[(1,3),(3,2)],[(1,1),(4,2)]]`
+        @param: dictionary contains word-indices of the corpus
+        @param: (default=np.float32) dtype used for value checking along the process
+
+        @return:initialised values for the algorithm specifications parameters
+                    - covar: topical prevalence covariates
+                    - enet: elastic-net configuration for the regularized update of the variational distribution over topics
+                    - interactions: (bool) whether interactions between topics and covariates should be modelled (True) or not (False)
+                    - betaindex: index for the topical prevalence covariate level (equals covar at the moment)
+                    - last_bound: list to store approximated bound for each EM-iteration
+                initialised values for the the global
+                    - V: number of tokens
+                    - K: number of topics 
+                    - N: number of documents 
+                    - A: topical prevalence covariate levels
+                    - mu: prior on topical prevalence
+                    - sigma: prior covariance on topical prevalence
+                    - beta: prior on word-topic distribution
+                    - eta: prior on document-topic distribution
+                    - kappa: prior on topical content covariates
+                    - lamda: prior on the variational distribution of the topical content model
         """
 
         self.dtype = np.finfo(dtype).dtype
@@ -44,7 +63,9 @@ class STM:
         self.settings = settings
         self.documents = documents
         self.dictionary = dictionary
-
+        
+        self.init = settings['init']['mode']
+        
         # test and store user-supplied parameters
         if len(documents) is None:
             raise ValueError("documents must be specified to establish input space")
@@ -78,25 +99,33 @@ class STM:
         self.init_lamda()
 
     def init_beta(self):
-        """Beta has shape str(self.K, self.V))"""
-
-        beta_init = random.gamma(0.1, 1, self.V * self.K).reshape(self.K, self.V)
-        beta_init_normalized = beta_init / np.sum(beta_init, axis=1)[:, None]
-        if self.interactions:  # TODO: replace ifelse condition by logic
-            self.beta = np.repeat(beta_init_normalized[None, :], self.A, axis=0)
-            # test if probabilities sum to 1
-            [
-                np.testing.assert_almost_equal(sum_over_words, 1)
-                for i in range(self.A)
-                for sum_over_words in np.sum(self.beta[i], axis=1)
-            ]
+        """
+        beta : {float, numpy.ndarray of float, list of float, str}, optional
+            A-priori belief on topic-word distribution, this can be:
+                * scalar for a symmetric prior over topic-word distribution,
+                * 1D array of length equal to num_words to denote an asymmetric user defined prior for each word,
+                * matrix of shape (num_topics, num_words) to assign a probability for each word-topic combination.
+        """
+        if self.init=='spectral':
+            self.beta = spectral_init(self.doc_term_matrix, self.K, maxV=10000)
         else:
-            self.beta = beta_init_normalized
-            [
-                np.testing.assert_almost_equal(sum_over_words, 1)
-                for i in range(self.A)
-                for sum_over_words in np.sum(self.beta, axis=1)
-            ]
+            beta_init = random.gamma(0.1, 1, self.V * self.K).reshape(self.K, self.V)
+            beta_init_normalized = beta_init / np.sum(beta_init, axis=1)[:, None]
+            if self.interactions:  # TODO: replace ifelse condition by logic
+                self.beta = np.repeat(beta_init_normalized[None, :], self.A, axis=0)
+                # test if probabilities sum to 1
+                [
+                    np.testing.assert_almost_equal(sum_over_words, 1)
+                    for i in range(self.A)
+                    for sum_over_words in np.sum(self.beta[i], axis=1)
+                ]
+            else:
+                self.beta = beta_init_normalized
+                [
+                    np.testing.assert_almost_equal(sum_over_words, 1)
+                    for i in range(self.A)
+                    for sum_over_words in np.sum(self.beta, axis=1)
+                ]
         assert self.beta.shape == (
             self.K,
             self.V,
