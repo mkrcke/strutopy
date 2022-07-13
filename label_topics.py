@@ -23,25 +23,31 @@ def label_topics(model, n, topics):
     Highest Prob: are the words within each topic with the highest probability
     (inferred directly from topic-word distribution parameter beta)
     
-    @param model An \code{STM} model object.
-    @param topics vector of numbers indicating the topics to include.  Default
+    @param model STM model object.
+    @param topics number of topics to include.  Default
     is all topics.
     @param n The desired number of words (per type) used to label each topic.
     Must be 1 or greater.
 
-    @return labelTopics object (list) \item{prob }{matrix of highest
+    TODO: @return labelTopics object (list) \item{prob }{matrix of highest
     probability words}
     """
+    assert n>1, 'n must be 1 or greater'
+
     beta = model.beta
     copy = beta.copy()
-    K = model.K
+    if topics:
+        K = topics
+    else: 
+        K = model.K
+    
     vocab = dictionary
 
     # wordcounts = model.settings["dim"]["wcounts"]["x"] #TODO: implement word counts
     
     # Sort by word probabilities on each row of beta
     # Returns words with highest probability per topic
-    problabels = np.argsort(-1*beta)[:10]
+    problabels = np.argsort(-1*beta)[:n]
 
     out = []
     for k in range(K):
@@ -130,5 +136,5 @@ settings = {
 model = STM(settings, documents, dictionary)
 model.expectation_maximization(saving=False)
 
-# %%
-label_topics(model, n=5, topics=3)
+# %% print most probable 20 words for 10 topics
+label_topics(model, n=20, topics=10)
