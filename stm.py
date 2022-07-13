@@ -242,7 +242,7 @@ class STM:
                 break
             except:
                 print(
-                    "Cholesky Decomposition failed, because Sigma is not positive definite!"
+                    "Cholesky Decomposition failed, because Sigma is not positive definite."
                 )
                 self.sigmaentropy = (
                     0.5 * np.linalg.slogdet(self.sigma)[1]
@@ -668,7 +668,7 @@ class STM:
             "mu": self.mu,
             "sigma": self.sigma,
             "beta": self.beta,
-            #"settings": self.settings,
+            "settings": self.settings,
             "time_processed": self.time_processed,
             "lambda":self.lamda,
             "documents": self.documents,
