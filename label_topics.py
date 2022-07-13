@@ -133,8 +133,8 @@ settings = {
 }
 
 #%% run model 
-model = STM(settings, documents, dictionary)
-model.expectation_maximization(saving=False)
+# model = STM(settings, documents, dictionary)
+# model.expectation_maximization(saving=False)
 
 # %% print most probable 20 words for 10 topics
-label_topics(model, n=20, topics=10)
+# label_topics(model, n=20, topics=10)

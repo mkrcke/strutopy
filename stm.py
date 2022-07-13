@@ -3,6 +3,7 @@
 import json
 import logging
 import math
+from pyexpat import model
 
 # import matplotlib.pyplot as plt
 import time
@@ -14,6 +15,7 @@ import scipy
 import sklearn.linear_model
 from scipy import optimize
 from sklearn.preprocessing import OneHotEncoder
+from operator import itemgetter
 
 # custom packages
 from generate_docs import CorpusCreation
@@ -22,13 +24,18 @@ from spectral_initialisation import spectral_init
 logger = logging.getLogger(__name__)
 
 class STM:
-    def __init__(self, settings, documents, dictionary, dtype=np.float32, init='spectral'):
+    def __init__(self, settings, documents, dictionary, dtype=np.float32, init='spectral', model='STM', mode='ols'):
         """
         @param: settings (c.f. large dictionary TODO: create settings file)
         @param: documents BoW-formatted documents in list of list of arrays with index-count tuples for each word
                 example: `[[(1,3),(3,2)],[(1,1),(4,2)]]` -> [list of (int, int)]
         @param: dictionary contains word-indices of the corpus
-        @param: (default=np.float32) dtype used for value checking along the process
+        @param: dtype (default=np.float32) used for value checking along the process
+        @param: init (default='spectral') init method to be used to initialise the word-topic distribution beta.  
+                One might choose between 'random' and 'spectral', however the spectral initialisation is recommended
+        @param: model (default='STM') to update variational mean parameter for the topical prevalence. Choose between 
+                'STM' and 'CTM'. Note, however, that 'CTM' updates ignore the topical prevalence model.
+        @param: mode (default='ols') to estimate the prevalence coefficients (gamma). Otherwise choose between l1 & l2 norm.
 
         @return:initialised values for the algorithm specifications parameters
                     - covar: topical prevalence covariates
@@ -57,6 +64,8 @@ class STM:
         self.documents = documents
         self.dictionary = dictionary
         self.init = init
+        self.model = model
+        self.mode = mode
         
         # test and store user-supplied parameters
         if len(documents) is None:
@@ -69,9 +78,9 @@ class STM:
         self.V = self.settings["dim"]["V"]  # Number of words
         self.K = self.settings["dim"]["K"]  # Number of topics
         self.A = self.settings["dim"]["A"]  # TODO: when data changes ...
+        self.N = len(self.documents)
         self.covar = settings["covariates"]["X"]
         self.enet = settings["tau"]["enet"]
-        self.N = len(self.documents)
         self.interactions = settings["kappa"]["interactions"]
         self.betaindex = settings["covariates"]["betaindex"]
 
@@ -132,7 +141,7 @@ class STM:
 
     # TODO: Check for the shape of mu if this is correct
     def init_mu(self):
-        self.mu = np.zeros((self.K - 1,))
+        self.mu = np.zeros((self.N, self.K - 1))
 
     def init_sigma(self):
         self.sigma = np.zeros(((self.K - 1), (self.K - 1)))
@@ -148,9 +157,9 @@ class STM:
     def init_lamda(self):
         """document level parameter to store the mean variational parameters
         based on the numerical optimization and the log additive transformation.
-        dimension: N by K
+        dimension: N by K-1
         """
-        self.lamda = np.zeros((self.N, self.K))
+        self.lamda = np.zeros((self.N, self.K-1))
 
     def init_gamma(self): 
         """The prior specification for the topic prevalence parameters is a zero mean Gaussian distribution with shared variance parameter,
@@ -221,7 +230,6 @@ class STM:
             "covar": covar
             #'kappasum':, why rolling sum?
         }
-
     # _____________________________________________________________________
     def E_step(self):
         """
@@ -276,12 +284,13 @@ class STM:
             # optimize variational posterior
             # does not matter if we use optimize.minimize(method='BFGS') or optimize fmin_bfgs()
             res = self.optimize_eta(
-                eta=self.eta[i], word_count=word_count_1v, beta_doc=beta_doc_kv
+                eta=self.eta[i], mu=self.mu[i], word_count=word_count_1v, beta_doc=beta_doc_kv
             )
 
             # print(f"document {i}:", res.message)
             self.eta[i] = res.x
-            self.lamda[i] = np.exp(np.insert(res.x, self.K-1, 0)) / np.sum(np.exp(np.insert(res.x, self.K-1, 0)))
+            # self.lamda[i] = np.exp(np.insert(res.x, self.K-1, 0)) / np.sum(np.exp(np.insert(res.x, self.K-1, 0)))
+            self.lamda[i] = (np.exp(res.x)/np.sum(np.exp(res.x)))
             # Compute Hessian, Phi and Lower Bound
             # 1) check if inverse is a legitimate cov matrix
             # 2) if not, adjust matrix to be positive definite
@@ -293,7 +302,7 @@ class STM:
             # Delta Bound
             bound_i = self.lower_bound(
                 L_i,
-                mu=self.mu,
+                mu=self.mu[i],
                 word_count=word_count_1v,
                 beta_doc_kv=beta_doc_kv,
                 eta=self.eta[i],
@@ -370,29 +379,60 @@ class STM:
         )
         print('___________________________________________________')
 
-    def update_mu(self, mode = "CTM"):
+    def update_mu(self, intercept=False):
         """
-        updates the mean parameter for the [document specific] logistic normal distribution
+        updates the mean parameter for the [document specific] logistic normal distribution.
+        Changing estimation of prevalence covariate effects: 
+            - if CTM, the prevalence covariate effects are not included, hence we have the CTM specification
+            - if STM, the prevalence covariates are included with one of the following options: 
+                - mode == "lasso": uses the l1-loss for regularizing parameters
+                - mode == "ridge": uses the l2-loss for regularizing parameters
+                - mode == "ols": coefficients are estimated using ordinary least squares estimation
+        @param: mode (default: 'ols') for estimation of coefficients in the linear model
+        @param: intercept (default: True) whether or not an intercept is included in the model
         """
-        if mode == "CTM":
+        if self.model == "CTM":
             #assert self.A < 2, 'Uses column means for the mean, since no covariates are specified.'
-            self.mu = np.mean(self.eta, axis=0)
+            self.mu = np.repeat(np.mean(self.lamda, axis=0)[None,:], self.N, axis=0)
          
         # mode = L1 simplest method requires only glmnet (https://cran.r-project.org/web/packages/glmnet/index.html)
-        elif mode == "L1":
+        elif self.model == "STM":
             #prepare covariate matrix for modeling 
             try:
-                covar = self.covar.astype('category')
+                self.covar = self.covar.astype('category')
             except:
                 pass
             covar2D = np.array(self.covar)[:,None] #prepares 1D array for one-hot encoding (OHE) by making it 2D
             enc = OneHotEncoder(handle_unknown='ignore') #create OHE
             covarOHE = enc.fit_transform(covar2D).toarray() #fit OHE
-            linear_model = sklearn.linear_model.Lasso(alpha=enet)
-            fitted_model = linear_model.fit(covarOHE,self.lambd)
-            self.gamma = np.insert(fitted_model.coef_, 0, fitted_model.intercept_).reshape(self.K-1,3)
-            design_matrix = np.c_[ np.ones(covarOHE.shape[0]), covarOHE]
+            
+            if self.mode not in ['lasso','ridge', 'ols']: 
+                print("Need to specify the estimation mode of prevalence covariate coefficients. Uses default 'ols'.")
+ 
+            if self.mode == 'lasso':
+                # get maximal penalty yielding nonzero coefficients for the lasso
+                # np.abs(covarOHE.T.dot(self.lamda)).max() / len(covarOHE) = 0.095
+                linear_model = sklearn.linear_model.Lasso(alpha=1, fit_intercept=intercept)
+                fitted_model = linear_model.fit(covarOHE,self.lamda)
+            
+            elif self.mode == 'ridge':
+                linear_model = sklearn.linear_model.Ridge(alpha=.1, fit_intercept=intercept)
+                fitted_model = linear_model.fit(covarOHE,self.lamda)
+            
+            else:
+                linear_model = sklearn.linear_model.LinearRegression(fit_intercept=intercept)
+                fitted_model = linear_model.fit(covarOHE, self.lamda)
+            
+            # adjust design matrix if intercept is estimated
+            if intercept: 
+                self.gamma = np.column_stack((fitted_model.intercept_, fitted_model.coef_))
+                design_matrix = np.c_[ np.ones(covarOHE.shape[0]), covarOHE]
+
+            self.gamma = fitted_model.coef_
+            design_matrix = covarOHE
+            
             self.mu = design_matrix@self.gamma.T
+        
         else: 
             raise ValueError('Updating the topical prevalence parameter requires a mode. Choose from "CTM", "Pooled" or "L1" (default).')
     
@@ -485,10 +525,10 @@ class STM:
         exps = weight * np.exp(xshift)[:, None]
         return exps / np.sum(exps)
 
-    def optimize_eta(self, eta, word_count, beta_doc):
+    def optimize_eta(self, eta, mu,  word_count, beta_doc):
         """Optimizes the variational parameter eta given the likelihood and the gradient function"""
 
-        def f(eta, word_count, beta_doc):
+        def f(eta, word_count, mu, beta_doc):
             """objective for the variational update q(eta)
 
             Args:
@@ -505,19 +545,19 @@ class STM:
             # formula
             # from cpp implementation:
             # log(expeta * betas) * doc_cts - ndoc * log(sum(expeta))
-            return np.float64((0.5 * (eta[:-1] - self.mu).T @ self.siginv @ (eta[:-1] - self.mu)) - (np.dot(
+            return np.float64((0.5 * (eta[:-1] - mu).T @ self.siginv @ (eta[:-1] - mu)) - (np.dot(
                 word_count, eta.max() + np.log(np.exp(eta - eta.max()) @ beta_doc))
             - Ndoc * scipy.special.logsumexp(eta)))
 
-        def df(eta, word_count, beta_doc):
+        def df(eta, word_count, mu, beta_doc):
             """gradient for the objective of the variational update q(etas)"""
             eta = np.insert(eta, self.K - 1, 0)
             # formula
-            return np.array(np.float64(self.siginv @ (eta[:-1] - self.mu)-(beta_doc @ (word_count / np.sum(beta_doc.T, axis=1))
+            return np.array(np.float64(self.siginv @ (eta[:-1] - mu)-(beta_doc @ (word_count / np.sum(beta_doc.T, axis=1))
             - (np.sum(word_count) / np.sum(np.exp(eta)))*np.exp(eta))[:-1]))
 
         return optimize.minimize(
-            f, x0=eta, args=(word_count, beta_doc), jac=df, method="BFGS"
+            f, x0=eta, args=(word_count,mu,beta_doc), jac=df, method="BFGS"
         )
 
     def make_pd(self, M):
@@ -674,6 +714,47 @@ class STM:
             "documents": self.documents,
         }
         json.dump(model, open("model.json", "w"), cls=NumpyEncoder)
+    
+    def label_topics(self, n, topics):
+        """
+        Label topics
+        
+        Generate a set of words describing each topic from a fitted STM object.
+        
+        Highest Prob: are the words within each topic with the highest probability
+        (inferred directly from topic-word distribution parameter beta)
+        
+        @param model STM model object.
+        @param topics number of topics to include.  Default
+        is all topics.
+        @param n The desired number of words (per type) used to label each topic.
+        Must be 1 or greater.
+
+        TODO: @return labelTopics object (list) \item{prob }{matrix of highest
+        probability words}
+        """
+        assert n>1, 'n must be 1 or greater'
+
+        if topics:
+            K = topics
+        else: 
+            K = self.K
+        
+        vocab = self.dictionary
+
+        # wordcounts = model.settings["dim"]["wcounts"]["x"] #TODO: implement word counts
+        
+        # Sort by word probabilities on each row of beta
+        # Returns words with highest probability per topic
+        problabels = np.argsort(-1*self.beta)[:n]
+
+        out = []
+        for k in range(K):
+            probwords = [itemgetter(i)(vocab) for i in problabels[k,:n]]
+            print(f"Topic {k}:\n \t Highest Prob: {probwords}")
+            out.append(probwords)
+        
+        return
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -690,3 +771,5 @@ class NumpyEncoder(json.JSONEncoder):
             return obj.to_json()
         return json.JSONEncoder.default(self, obj)
 
+
+# %%

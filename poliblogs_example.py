@@ -7,10 +7,6 @@ import math
 from stm import STM
 
 #%% load data
-# raw documents
-data = pd.read_csv('data/poliblogs2008.csv')
-# selection for quick testing
-
 # load preprocessed corpus
 documents = corpora.MmCorpus('data/corpus.mm')
 # dictionary: 
@@ -18,13 +14,17 @@ dictionary = corpora.Dictionary.load('data/dictionary')
 # vocabulary: 
 vocab = dictionary.token2id
 
+# load metadata matching to the documents 3000-4000
+data = pd.read_csv('data/poliblogs2008.csv')
+data = data[3000:4000]
+
 #%% """ Setting control variables"""
 prevalence = 'rating'
 content = 'blog'
 num_topics = 10
 
 #Initialize parameters
-data = data[3000:4000]
+
 xmat = data.loc[:, prevalence]
 yvar = data.loc[:, content].astype('category')
 yvarlevels = set(yvar)
@@ -63,9 +63,6 @@ settings = {
         'ic.k':2,
         'maxit':1e4},
     'init':{
-        'mode':init_type, 
-        'nits':20,
-        'burnin':25,
         'alpha':50/num_topics,
         'eta':.01,
         's':.05,
@@ -80,7 +77,6 @@ settings = {
         'yvarlevels':yvarlevels,
         'formula': prevalence,},
     'gamma':{
-        'mode':'L1', #needs to be set for the m-step (update mu in the topical prevalence model)
         'prior':np.nan, #sigma in the topical prevalence model
         'enet':1, #regularization term
         'ic.k':2,#information criterion
@@ -91,5 +87,7 @@ settings = {
 }
 
 #%%
-model = STM(settings, documents, dictionary)
-model.expectation_maximization(saving=True)
+model = STM(settings, documents, dictionary, init='random', model='STM')
+model.expectation_maximization(saving=False)
+
+# %%
