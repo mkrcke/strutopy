@@ -109,7 +109,7 @@ class STM:
                 * matrix of shape (num_topics, num_words) to assign a probability for each word-topic combination.
         """
         if self.init=='spectral':
-            self.beta = spectral_init(self.documents, self.K, maxV=10000)
+            self.beta = spectral_init(self.documents, self.K, self.V, maxV=5000)
         elif self.init=='random':
             beta_init = random.gamma(0.1, 1, self.V * self.K).reshape(self.K, self.V)
             beta_init_normalized = beta_init / np.sum(beta_init, axis=1)[:, None]
@@ -475,7 +475,7 @@ class STM:
         else:
             print(f"implementation for {kappa} is missing")
 
-    def expectation_maximization(self, saving):
+    def expectation_maximization(self, saving, prefix):
         t1 = time.process_time()
         for _iteration in range(100):
             print(f'________________Iteration:{_iteration}_____________________')
@@ -488,7 +488,7 @@ class STM:
                 )
                 if saving == True: 
                     print("saving model...")
-                    self.save_model()
+                    self.save_model(prefix)
                 break
             if self.max_its_reached(_iteration):
                 self.time_processed = time.process_time() - t1
@@ -497,7 +497,7 @@ class STM:
                 )
                 if saving == True: 
                     print("saving model...")
-                    self.save_model()
+                    self.save_model(prefix)
                 break 
 
     # _____________________________________________________________________
@@ -713,19 +713,22 @@ class STM:
         phi = np.multiply(b, np.sqrt(word_count).T)  # KxV
         return phi
 
-    def save_model(self):
+    def save_model(self, prefix):
         model = {
             "bound": self.last_bounds,
             "mu": self.mu,
             "sigma": self.sigma,
             "beta": self.beta,
-            "settings": self.settings,
             "time_processed": self.time_processed,
             "lambda":self.eta,
             "theta":self.theta, 
-            "documents": self.documents,
+            #"settings": self.settings,
+            #"documents": self.documents,
         }
-        json.dump(model, open("model.json", "w"), cls=NumpyEncoder)
+        if prefix:
+            json.dump(model, open(f"{prefix}_model.json", "w"), cls=NumpyEncoder)
+        else: 
+            json.dump(model, open("model.json", "w"), cls=NumpyEncoder)
     
     def label_topics(self, n, topics):
         """

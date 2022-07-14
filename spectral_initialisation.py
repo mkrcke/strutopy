@@ -5,7 +5,7 @@ from qpsolvers import solve_qp
 from scipy.sparse import diags, csr_matrix, csr_array, coo_matrix
 from sklearn.preprocessing import normalize
 
-def spectral_init(corpus, K, maxV=None, verbose=True, print_anchor=False):
+def spectral_init(corpus, K, V, maxV=None, verbose=True, print_anchor=False):
     """
     init='spectral' provides a deterministic initialization using the
     spectral algorithm given in Arora et al 2014.  See Roberts, Stewart and
@@ -33,6 +33,10 @@ def spectral_init(corpus, K, maxV=None, verbose=True, print_anchor=False):
     wprob = np.array(wprob).flatten()
 
 
+    keep = np.argsort(-1*wprob)[:maxV]
+    doc_term_matrix = doc_term_matrix[:,keep]
+    wprob = wprob[keep]
+
     if verbose: print("Create gram matrix...")
     Q = gram(doc_term_matrix)
     
@@ -47,7 +51,13 @@ def spectral_init(corpus, K, maxV=None, verbose=True, print_anchor=False):
         print('Recover values for beta')
     beta = recover_l2(Q, anchor, wprob)
 
-    return beta.T
+    if keep is not None: 
+        beta_new = np.zeros(K*V).reshape(K,V)
+        beta_new[:,keep] = beta
+        beta_new = beta_new + 0.001/V
+        beta = beta_new/np.sum(beta_new)
+
+    return beta
 
 def create_dtm(corpus):
     """
@@ -218,11 +228,10 @@ def recover_l2(Q, anchor, wprob):
                 ub = np.ones(M.shape[0]),
                 solver = 'quadprog'
                 )
-
-        # replace small negative values with epsilon 
-        if np.any(solution<0): 
-            solution[solution<0] = np.finfo(float).eps
-        condprob[i] = solution
+            # replace small negative values with epsilon and store solution
+            if np.any(solution<0): 
+                solution[solution<0] = np.finfo(float).eps
+            condprob[i] = solution
     
     # p(z|w)
     weights = np.vstack(condprob)
@@ -233,7 +242,7 @@ def recover_l2(Q, anchor, wprob):
     # check probability assumption
     assert np.any(A>0), 'Negative probabilities for some words.'
     assert np.any(A<1), 'Word probabilities larger than one.'
-    return A
+    return A.T
  
 
 ############ TESTING ######################
