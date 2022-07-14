@@ -7,14 +7,12 @@ import numpy as np
 import pandas as pd 
 
 # load corpus & dictionary **REPLACE WITH NEW CORPUS + DICTIONARY**
-data = pd.read_csv('data/poliblogs2008.csv')
-data = data[3000:4000]
-corpus = corpora.MmCorpus('data/corpus.mm')
-dictionary = corpora.Dictionary.load('data/dictionary')
+data = pd.read_csv('application/data/corpus_preproc.csv')
+corpus = corpora.MmCorpus('application/data/BoW_corpus.mm')
+dictionary = corpora.Dictionary.load('application/data/dictionary.mm')
 
-
-# **REPLACE WITH ML, Statistics
-prevalence = 'rating'
+# set topical prevalence 
+prevalence = ['statistics','ml']
 xmat = data.loc[:, prevalence]
 interactions = False #settings.kappa
 verbose = True
@@ -57,7 +55,7 @@ settings = {
 
 def main():
     # define k candidates
-    K_candidates = np.array([5,10])
+    K_candidates = np.array([10])
 
     results_k = find_k(K_candidates, corpus=corpus, settings=settings,models=['STM'])
     

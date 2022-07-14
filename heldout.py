@@ -23,40 +23,50 @@
 
 #%% Load packages and model
 import json
+import inspect
 import matplotlib.pyplot as plt
 import numpy as np 
 from stm import STM
 import pandas as pd
 from gensim.corpora.dictionary import Dictionary
+from gensim import utils 
 from generate_docs import CorpusCreation
 
 #%%
 def split_corpus(corpus, proportion=0.8): 
+    
   test_split_idx = int(proportion*len(corpus))
   validate_split_idx = int((proportion+(1-proportion)/2)*len(corpus))
-
-  train = np.array(corpus[:test_split_idx])
-  test = np.array(corpus[test_split_idx:validate_split_idx])
-  validate = np.array(corpus[validate_split_idx:])
+  if not type(corpus)==list:
+    try: 
+      train = [doc for doc in corpus[:test_split_idx]]
+      test = [doc for doc in corpus[test_split_idx:validate_split_idx]]
+      validate = [doc for doc in corpus[validate_split_idx:]]
+    except: 
+      train = [doc for doc in utils.ClippedCorpus(corpus, int(0.8*len(corpus)))]
+      # test & validate are missing here!!! 
+      # currently working on this
+  else: 
+    train = np.array(corpus[:test_split_idx])
+    test = np.array(corpus[test_split_idx:validate_split_idx])
+    validate = np.array(corpus[validate_split_idx:])
 
   return train, test, validate
 
-def cut_in_half(set):
+def cut_in_half(doc_set):
   """function to split a set of documents in two parts
 
-  Args:
-      set (np.ndarray): set of documents in bag-of-words format
+  @param: doc_set (np.ndarray) set of documents in bag-of-words format
 
-  Returns:
-      first_half: returns the set with every other word removed (starting at index 0)
-      second_half: returns the set with every other word removed (starting at index 1)
+  @return: first_half returns the set with every other word removed (starting at index 0)
+  @return: second_half returns the set with every other word removed (starting at index 1)
   """
-  first_half = np.empty(len(set), dtype=np.ndarray)
-  second_half = np.zeros(len(set), dtype=np.ndarray)
+  first_half = np.empty(len(doc_set), dtype=np.ndarray)
+  second_half = np.zeros(len(doc_set), dtype=np.ndarray)
   
-  for doc in range(len(set)): 
-    first_half[doc] = (set[doc][0::2])
-    second_half[doc] = (set[doc][1::2])
+  for doc in range(len(doc_set)): 
+    first_half[doc] = (doc_set[doc][0::2])
+    second_half[doc] = (doc_set[doc][1::2])
 
   return first_half, second_half
 
@@ -72,10 +82,10 @@ def eval_heldout(heldout, theta, beta):
   return doc_ll, np.mean(doc_ll)
 
 
-def train_models(beta_train_corpus, theta_train_corpus, K, model):
+def train_models(beta_train_corpus, theta_train_corpus, K, model, settings):
   settings["dim"]["K"] = K
   # extract covariates corresponding to the training corpus
-  settings["covariates"]["betaindex"] = settings["covariates"]["betaindex"][:len(beta_train_corpus)]
+  # settings["covariates"]["betaindex"] = settings["covariates"]["betaindex"][:len(beta_train_corpus)]
   settings["covariates"]["X"] = settings["covariates"]["X"][:len(beta_train_corpus)]
   # initialize dictionaries for different corpora
   model_beta_dictionary = Dictionary.from_corpus(beta_train_corpus)
@@ -100,7 +110,7 @@ def train_models(beta_train_corpus, theta_train_corpus, K, model):
 
   return np.array(model_beta.beta), np.array(model_theta.theta)
 
-def heldout(corpus, K, model):
+def heldout(corpus, K, model, settings):
   
   train, test, validate = split_corpus(corpus, proportion=0.8)
   test_1, test_2 = cut_in_half(test)
@@ -109,123 +119,124 @@ def heldout(corpus, K, model):
   beta_train_corpus = np.concatenate((train, test))
   theta_train_corpus = np.concatenate((train, test_1))
 
-  beta, theta = train_models(beta_train_corpus, theta_train_corpus, model=model, K=K)
+  beta, theta = train_models(beta_train_corpus, theta_train_corpus, settings=settings, model=model, K=K)
   
   doc_ll, expected_ll = eval_heldout(heldout=test_2, beta=beta, theta=theta)
 
   return doc_ll, expected_ll
 
-def find_k(K_candidates, corpus, settings):
-  results=[[],[]]
-  for i, model in enumerate(['STM', 'CTM']):
+def find_k(K_candidates, models, corpus, settings):
+  results= [[]] * len(models)
+  for i, model in enumerate(models):
     for j,K in enumerate(K_candidates):
-      _,expected_ll = heldout(corpus=corpus, K=K, model=model)
+      _,expected_ll = heldout(corpus=corpus, K=K, model=model, settings=settings)
       results[i].append(expected_ll)
   
   return results
 
 #%%
-Corpus = CorpusCreation(
-    n_topics=10,
-    n_docs=500,
-    n_words=150,
-    V=500,
-    treatment=False,
-    alpha='symmetric',
-    #alpha_treatment='auto-linear',
-)
-Corpus.generate_documents()
+# Corpus = CorpusCreation(
+#     n_topics=10,
+#     n_docs=500,
+#     n_words=150,
+#     V=500,
+#     treatment=False,
+#     alpha='symmetric',
+#     p=2,
+#     #alpha_treatment='auto-linear',
+# )
+# Corpus.generate_documents()
 
-# Set starting values and parameters
-# Parameter Settings (required for simulation process)
-num_topics = 10
-A = 2
-verbose = True
-interactions = False  # settings.kappa
-betaindex = np.concatenate(
-    [np.repeat(0, len(Corpus.documents) / 2), np.repeat(1, len(Corpus.documents) / 2)]
-)
+# # Set starting values and parameters
+# # Parameter Settings (required for simulation process)
+# num_topics = 10
+# A = 2
+# verbose = True
+# interactions = False  # settings.kappa
+# betaindex = np.concatenate(
+#     [np.repeat(0, len(Corpus.documents) / 2), np.repeat(1, len(Corpus.documents) / 2)]
+# )
 
-# Initialization and Convergence Settings
-ngroups = 1  # settings.ngroups
-max_em_its = 5  # settings.convergence
-emtol = 1e-5  # settings.convergence
+# # Initialization and Convergence Settings
+# ngroups = 1  # settings.ngroups
+# max_em_its = 5  # settings.convergence
+# emtol = 1e-5  # settings.convergence
 
 
 
-settings = {
-    "dim": {
-        "K": num_topics,  # number of topics
-        "V": len(Corpus.dictionary),  # number of words
-        "A": A,  # dimension of topical content
-        "N": len(Corpus.documents),
-    },
-    "verbose": verbose,
-    "kappa": {
-        "interactions": interactions,
-        "fixedintercept": True,
-        "contrats": False,
-        "mstep": {"tol": 0.01, "maxit": 5},
-    },
-    "tau": {
-        "mode": np.nan,
-        "tol": 1e-5,
-        "enet": 1,
-        "nlambda": 250,
-        "lambda.min.ratio": 0.001,
-        "ic.k": 2,
-        "maxit": 1e4,
-    },
-    "init": {
-        "nits": 20,
-        "burnin": 25,
-        "alpha": 50 / num_topics,
-        "eta": 0.01,
-        "s": 0.05,
-        "p": 3000,
-    },
-    "convergence": {
-        "max.em.its": max_em_its,
-        "em.converge.thresh": emtol,
-        "allow.neg.change": True,
-    },
-    "covariates": {
-        "X": betaindex,
-        "betaindex": betaindex,
-        # 'yvarlevels':yvarlevels,
-        # 'formula': prevalence,
-    },
-    "gamma": {
-        "mode": "L1",  # needs to be set for the m-step (update mu in the topical prevalence model)
-        "prior": np.nan,  # sigma in the topical prevalence model
-        "enet": 1,  # regularization term
-        "ic.k": 2,  # information criterion
-        "maxits": 1000,
-    },
-    "sigma": {
-        "prior": 0,
-        "ngroups": ngroups,
-    },
-}
+# settings = {
+#     "dim": {
+#         "K": num_topics,  # number of topics
+#         "V": len(Corpus.dictionary),  # number of words
+#         "A": A,  # dimension of topical content
+#         "N": len(Corpus.documents),
+#     },
+#     "verbose": verbose,
+#     "kappa": {
+#         "interactions": interactions,
+#         "fixedintercept": True,
+#         "contrats": False,
+#         "mstep": {"tol": 0.01, "maxit": 5},
+#     },
+#     "tau": {
+#         "mode": np.nan,
+#         "tol": 1e-5,
+#         "enet": 1,
+#         "nlambda": 250,
+#         "lambda.min.ratio": 0.001,
+#         "ic.k": 2,
+#         "maxit": 1e4,
+#     },
+#     "init": {
+#         "nits": 20,
+#         "burnin": 25,
+#         "alpha": 50 / num_topics,
+#         "eta": 0.01,
+#         "s": 0.05,
+#         "p": 3000,
+#     },
+#     "convergence": {
+#         "max.em.its": max_em_its,
+#         "em.converge.thresh": emtol,
+#         "allow.neg.change": True,
+#     },
+#     "covariates": {
+#         "X": betaindex,
+#         "betaindex": betaindex,
+#         # 'yvarlevels':yvarlevels,
+#         # 'formula': prevalence,
+#     },
+#     "gamma": {
+#         "mode": "L1",  # needs to be set for the m-step (update mu in the topical prevalence model)
+#         "prior": np.nan,  # sigma in the topical prevalence model
+#         "enet": 1,  # regularization term
+#         "ic.k": 2,  # information criterion
+#         "maxits": 1000,
+#     },
+#     "sigma": {
+#         "prior": 0,
+#         "ngroups": ngroups,
+#     },
+# }
 
 
 # %%
 
-corpus = Corpus.documents
-K_candidates = np.array([5,10,20,30])
-results_k = find_k(K_candidates, corpus, settings)
+# corpus = Corpus.documents
+# K_candidates = np.array([5,10])
+# results_k = find_k(models = ['STM', 'CTM'], K_candidates, corpus, settings)
 
-# %% plot
-fig, ax = plt.subplots()
+# # %% plot
+# fig, ax = plt.subplots()
 
-ax.scatter(K_candidates, results_k[0], label='CTM')
-ax.scatter(K_candidates, results_k[1], label='STM')
+# ax.scatter(K_candidates, results_k[1], label='STM')
+# ax.scatter(K_candidates, results_k[0], label='CTM')
 
 
-plt.title("Held-out Likelihood for varying number of topics")
-plt.xlabel("Number of topics")
-plt.ylabel("Held-out Likelihood")
-plt.legend()
-plt.savefig('img/different_k_no_treatment', bbox_inches='tight', dpi=360)
-plt.show()
+# plt.title("Held-out Likelihood for varying number of topics")
+# plt.xlabel("Number of topics")
+# plt.ylabel("Held-out Likelihood")
+# plt.legend()
+# #plt.savefig('img/different_k_no_treatment', bbox_inches='tight', dpi=360)
+# plt.show()
 # %%

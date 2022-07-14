@@ -39,7 +39,7 @@ class STM:
 
         @return:initialised values for the algorithm specifications parameters
                     - covar: topical prevalence covariates
-                    - enet: elastic-net configuration for the regularized update of the variational distribution over topics
+                    # - enet: elastic-net configuration for the regularized update of the variational distribution over topics
                     - interactions: (bool) whether interactions between topics and covariates should be modelled (True) or not (False)
                     - betaindex: index for the topical prevalence covariate level (equals covar at the moment)
                     - last_bound: list to store approximated bound for each EM-iteration
@@ -72,17 +72,15 @@ class STM:
             raise ValueError("documents must be specified to establish input space")
         if self.settings["dim"]["K"] == 0:
             raise ValueError("Number of topics must be specified")
-        if self.settings["dim"]["A"] == 1:
-            logger.warning("no dimension for the topical content provided")
+        # if self.settings["dim"]["A"] == 1:
+        #    logger.warning("no dimension for the topical content provided")
 
         self.V = self.settings["dim"]["V"]  # Number of words
         self.K = self.settings["dim"]["K"]  # Number of topics
-        self.A = self.settings["dim"]["A"]  # TODO: when data changes ...
+        # self.A = self.settings["dim"]["A"]  # TODO: when data changes ...
         self.N = len(self.documents)
         self.covar = settings["covariates"]["X"]
-        self.enet = settings["tau"]["enet"]
         self.interactions = settings["kappa"]["interactions"]
-        self.betaindex = settings["covariates"]["betaindex"]
 
         # convergence settings
         self.last_bounds = []
@@ -99,7 +97,7 @@ class STM:
         self.init_mu()
         self.init_eta()
         self.init_sigma()
-        self.init_kappa()
+        # TODO: self.init_kappa()
         self.init_theta()
 
     def init_beta(self):
@@ -125,11 +123,11 @@ class STM:
                 ]
             else:
                 self.beta = beta_init_normalized
-                [
-                    np.testing.assert_almost_equal(sum_over_words, 1)
-                    for i in range(self.A)
-                    for sum_over_words in np.sum(self.beta, axis=1)
-                ]
+                # [
+                #     np.testing.assert_almost_equal(sum_over_words, 1)
+                #     for i in range(self.A)
+                #     for sum_over_words in np.sum(self.beta, axis=1)
+                # ]
         assert self.beta.shape == (
             self.K,
             self.V,
@@ -275,8 +273,10 @@ class STM:
             idx_1v = doc_array[
                 :, 0
             ]  # This counts the first dimension of the numpy array, was "idx_1v"
-            aspect = self.betaindex[i]
-            beta_doc_kv = self.get_beta(idx_1v, aspect)
+            
+            #aspect = self.betaindex[i]
+
+            beta_doc_kv = self.get_beta(idx_1v)
             word_count_1v = doc_array[:, 1]
 
             assert np.all(
@@ -344,7 +344,7 @@ class STM:
         )
         return beta_ss, sigma_ss
 
-    def get_beta(self, words, aspect):
+    def get_beta(self, words, aspect=None):
         """returns the topic-word distribution for a document with the respective topical content covariate (aspect)
 
         Args:
