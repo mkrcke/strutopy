@@ -72,22 +72,35 @@ def eval_heldout(heldout, theta, beta):
   return doc_ll, np.mean(doc_ll)
 
 
-def train_models(beta_train_corpus, theta_train_corpus, K):
+def train_models(beta_train_corpus, theta_train_corpus, K, model):
   settings["dim"]["K"] = K
+  # extract covariates corresponding to the training corpus
+  settings["covariates"]["betaindex"] = settings["covariates"]["betaindex"][:len(beta_train_corpus)]
+  settings["covariates"]["X"] = settings["covariates"]["X"][:len(beta_train_corpus)]
   # initialize dictionaries for different corpora
   model_beta_dictionary = Dictionary.from_corpus(beta_train_corpus)
   model_theta_dictionary = Dictionary.from_corpus(theta_train_corpus)
-  # initialize models
-  model_beta = STM(settings, beta_train_corpus, model_beta_dictionary) 
-  model_theta = STM(settings, theta_train_corpus, model_theta_dictionary)
+  # initialize models for theta and beta
+  model_beta = STM(
+    documents=beta_train_corpus,
+    dictionary=model_beta_dictionary,
+    settings=settings,
+    model=model,
+    init='random') 
+  model_theta = STM(
+    documents=theta_train_corpus,
+    dictionary=model_theta_dictionary,
+    settings=settings, 
+    model=model,
+    init='random')
   # take beta from model trained on train + test set
   model_beta.expectation_maximization(saving=False)
   # take theta from model trained on train + half of test documents
   model_theta.expectation_maximization(saving=False)
 
-  return np.array(model_beta.beta), np.array(model_theta.lamda)
+  return np.array(model_beta.beta), np.array(model_theta.theta)
 
-def heldout(corpus, K):
+def heldout(corpus, K, model):
   
   train, test, validate = split_corpus(corpus, proportion=0.8)
   test_1, test_2 = cut_in_half(test)
@@ -96,32 +109,33 @@ def heldout(corpus, K):
   beta_train_corpus = np.concatenate((train, test))
   theta_train_corpus = np.concatenate((train, test_1))
 
-  beta, theta = train_models(beta_train_corpus, theta_train_corpus, K=K)
+  beta, theta = train_models(beta_train_corpus, theta_train_corpus, model=model, K=K)
   
   doc_ll, expected_ll = eval_heldout(heldout=test_2, beta=beta, theta=theta)
 
   return doc_ll, expected_ll
 
-
-def find_k(candidates, corpus, settings):
-  results=[]
-  for K in candidates:
-    _,expected_ll = heldout(corpus, K=K)
-    results.append(expected_ll)
+def find_k(K_candidates, corpus, settings):
+  results=[[],[]]
+  for i, model in enumerate(['STM', 'CTM']):
+    for j,K in enumerate(K_candidates):
+      _,expected_ll = heldout(corpus=corpus, K=K, model=model)
+      results[i].append(expected_ll)
   
   return results
 
 #%%
 Corpus = CorpusCreation(
-    n_topics=50,
+    n_topics=10,
     n_docs=500,
-    n_words=50,
-    V=1500,
+    n_words=150,
+    V=500,
     treatment=False,
     alpha='symmetric',
+    #alpha_treatment='auto-linear',
 )
 Corpus.generate_documents()
-#%%
+
 # Set starting values and parameters
 # Parameter Settings (required for simulation process)
 num_topics = 10
@@ -132,12 +146,11 @@ betaindex = np.concatenate(
     [np.repeat(0, len(Corpus.documents) / 2), np.repeat(1, len(Corpus.documents) / 2)]
 )
 
-
 # Initialization and Convergence Settings
-init_type = "Random"  # settings.init
 ngroups = 1  # settings.ngroups
 max_em_its = 5  # settings.convergence
 emtol = 1e-5  # settings.convergence
+
 
 
 settings = {
@@ -164,7 +177,6 @@ settings = {
         "maxit": 1e4,
     },
     "init": {
-        "mode": init_type,
         "nits": 20,
         "burnin": 25,
         "alpha": 50 / num_topics,
@@ -180,8 +192,8 @@ settings = {
     "covariates": {
         "X": betaindex,
         "betaindex": betaindex,
-        #     'yvarlevels':yvarlevels,
-        #     'formula': prevalence,
+        # 'yvarlevels':yvarlevels,
+        # 'formula': prevalence,
     },
     "gamma": {
         "mode": "L1",  # needs to be set for the m-step (update mu in the topical prevalence model)
@@ -200,17 +212,20 @@ settings = {
 # %%
 
 corpus = Corpus.documents
-candidates = np.array([3,10,30,50,100])
-results_k = find_k(candidates, corpus, settings)
+K_candidates = np.array([5,10,20,30])
+results_k = find_k(K_candidates, corpus, settings)
 
 # %% plot
 fig, ax = plt.subplots()
 
-ax.scatter(candidates, results_k)
+ax.scatter(K_candidates, results_k[0], label='CTM')
+ax.scatter(K_candidates, results_k[1], label='STM')
 
 
 plt.title("Held-out Likelihood for varying number of topics")
 plt.xlabel("Number of topics")
 plt.ylabel("Held-out Likelihood")
+plt.legend()
+plt.savefig('img/different_k_no_treatment', bbox_inches='tight', dpi=360)
 plt.show()
 # %%

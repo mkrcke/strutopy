@@ -48,12 +48,12 @@ class STM:
                     - K: number of topics 
                     - N: number of documents 
                     - A: topical prevalence covariate levels
-                    - mu: prior on topical prevalence
-                    - sigma: prior covariance on topical prevalence
-                    - beta: prior on word-topic distribution
-                    - eta: prior on document-topic distribution
+                    - mu: prior on topical prevalence (N x (K-1))
+                    - sigma: prior covariance on topical prevalence ((K-1) x (K-1))
+                    - beta: prior on word-topic distribution (K x V)
+                    - eta: prior on document-topic distribution (N x (K-1))
+                    - theta: simplex mapped version of eta representing the document-topic distribution (N x K)
                     - kappa: prior on topical content covariates
-                    - lamda: prior on the variational distribution of the topical content model
         """
 
         self.dtype = np.finfo(dtype).dtype
@@ -100,7 +100,7 @@ class STM:
         self.init_eta()
         self.init_sigma()
         self.init_kappa()
-        self.init_lamda()
+        self.init_theta()
 
     def init_beta(self):
         """
@@ -154,12 +154,14 @@ class STM:
         """
         self.eta = np.zeros((self.N, self.K - 1))
 
-    def init_lamda(self):
-        """document level parameter to store the mean variational parameters
+    def init_theta(self):
+        """document level parameter to store the mean topic probabilities
         based on the numerical optimization and the log additive transformation.
-        dimension: N by K-1
+        (simplex mapped version of eta)
+
+        dimension: N by K
         """
-        self.lamda = np.zeros((self.N, self.K-1))
+        self.theta = np.zeros((self.N, self.K))
 
     def init_gamma(self): 
         """The prior specification for the topic prevalence parameters is a zero mean Gaussian distribution with shared variance parameter,
@@ -289,13 +291,14 @@ class STM:
 
             # print(f"document {i}:", res.message)
             self.eta[i] = res.x
-            # self.lamda[i] = np.exp(np.insert(res.x, self.K-1, 0)) / np.sum(np.exp(np.insert(res.x, self.K-1, 0)))
-            self.lamda[i] = (np.exp(res.x)/np.sum(np.exp(res.x)))
+            self.theta[i] = np.exp(np.insert(res.x,self.K-1,0))/np.sum(np.exp(np.insert(res.x,self.K-1,0)))
             # Compute Hessian, Phi and Lower Bound
             # 1) check if inverse is a legitimate cov matrix
             # 2) if not, adjust matrix to be positive definite
             hess_i = self.hessian(
-                eta=self.eta[i], word_count=word_count_1v, beta_doc_kv=beta_doc_kv
+                eta=self.eta[i],
+                word_count=word_count_1v,
+                beta_doc_kv=beta_doc_kv
             )
             L_i = self.decompose_hessian(hess_i, approx=res.hess_inv)
 
@@ -313,7 +316,9 @@ class STM:
 
             # Delta Phi
             phi = self.update_z(
-                eta=self.eta[i], beta_doc_kv=beta_doc_kv, word_count=word_count_1v
+                eta=self.eta[i],
+                beta_doc_kv=beta_doc_kv,
+                word_count=word_count_1v,
             )
 
             # print(bound_i)
@@ -393,7 +398,8 @@ class STM:
         """
         if self.model == "CTM":
             #assert self.A < 2, 'Uses column means for the mean, since no covariates are specified.'
-            self.mu = np.repeat(np.mean(self.lamda, axis=0)[None,:], self.N, axis=0)
+            # just use the mean for all documents 
+            self.mu = np.repeat(np.mean(self.eta, axis=0)[None,:], self.N, axis=0)
          
         # mode = L1 simplest method requires only glmnet (https://cran.r-project.org/web/packages/glmnet/index.html)
         elif self.model == "STM":
@@ -411,17 +417,17 @@ class STM:
  
             if self.mode == 'lasso':
                 # get maximal penalty yielding nonzero coefficients for the lasso
-                # np.abs(covarOHE.T.dot(self.lamda)).max() / len(covarOHE) = 0.095
+                # np.abs(covarOHE.T.dot(self.eta)).max() / len(covarOHE) = 0.095
                 linear_model = sklearn.linear_model.Lasso(alpha=1, fit_intercept=intercept)
-                fitted_model = linear_model.fit(covarOHE,self.lamda)
+                fitted_model = linear_model.fit(covarOHE,self.eta)
             
             elif self.mode == 'ridge':
                 linear_model = sklearn.linear_model.Ridge(alpha=.1, fit_intercept=intercept)
-                fitted_model = linear_model.fit(covarOHE,self.lamda)
+                fitted_model = linear_model.fit(covarOHE,self.eta)
             
             else:
                 linear_model = sklearn.linear_model.LinearRegression(fit_intercept=intercept)
-                fitted_model = linear_model.fit(covarOHE, self.lamda)
+                fitted_model = linear_model.fit(covarOHE, self.eta)
             
             # adjust design matrix if intercept is estimated
             if intercept: 
@@ -439,7 +445,7 @@ class STM:
 
     def update_sigma(self, nu, sigprior):
         """
-        Updates the variance covariance matrix for the logistic normal distribution
+        Updates the variance covariance matrix for the logistic normal distribution of topical prevalence
 
         Args:
             nu (_type_): variance-covariance for the variational document-topic distribution
@@ -710,7 +716,8 @@ class STM:
             "beta": self.beta,
             "settings": self.settings,
             "time_processed": self.time_processed,
-            "lambda":self.lamda,
+            "lambda":self.eta,
+            "theta":self.theta, 
             "documents": self.documents,
         }
         json.dump(model, open("model.json", "w"), cls=NumpyEncoder)
