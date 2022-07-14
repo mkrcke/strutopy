@@ -8,20 +8,20 @@
 
 import logging
 import time
-from random import betavariate
-
-import gensim
 import numpy as np
 
 import matplotlib.pyplot as plt
 from gensim.corpora.dictionary import Dictionary
+from archive.old_stm import stable_softmax
 
 logger = logging.getLogger(__name__)
 
 
 class CorpusCreation:
     """
-    Class to simulate documents for topic model evaluation. For simulation, LDAs data generating process described by Blei et al. (2003) is used:
+    Class to simulate documents for topic model evaluation. For simulation,
+    one can either use LDAs data generating process described by Blei et al. (2003), or 
+    STMs data generating process described by Roberts et al. (2016).
 
     Input
     ------------------------------------------------------------------------------------------------------------------
@@ -42,7 +42,7 @@ class CorpusCreation:
                     * 'symmetric': (default) Uses a fixed symmetric prior of `1.0 / num_topics`
                     * 'asymmetric': Uses a fixed normalized asymmetric prior of `1.0 / (topic_index + numpy.sqrt(num_topics))`,
                                     needs to have the same dimension as n_topics
-    - alpha_treatment: {dtype: float, list of float, str}, optionally, only if treatment == True
+    - alpha_treatment: {dtype: float, list of float, str}, required if treatment == True
                 Concentration parameter for the document-topic proportion of the treatment:
                     * scalar for a symmetric prior over document-topic proportions for the treatment group
                     * 1D array of length equal to alpha to denote as user defined prior for each topic of the treatment
@@ -51,9 +51,10 @@ class CorpusCreation:
                     * 'auto-nonlinear': Adjusts the prior by applying the exponential function with `numpy.exp(alpha)`
 
     Optionally, the user can provide topic-word-distributions and document-topic-distributions from a pre-trained model:
-    - beta: {dtype: ndarray}, optional: 2D-array providing topic-word-distributions with dimension KxV (global parameter)
-    - theta: {dtype: ndarray}, optional: 2D-array providing topic proportions with dimension NxK (document-level parameter)
-
+    
+    @param: beta {dtype: ndarray}, optional: 2D-array providing topic-word-distributions with dimension KxV (global parameter)
+    @param: theta {dtype: ndarray}, optional: 2D-array providing topic proportions with dimension NxK (document-level parameter)
+    @param: p (list[]): list of levels for the categorical metadata features. 
 
     Returns
     ------------------------------------------------------------------------------------------------------------------
@@ -72,11 +73,15 @@ class CorpusCreation:
         n_docs,
         n_words,
         V,
+        p,  
         treatment=False,
         alpha="symmetric",
+        dgp="STM", 
+        metadata=None,
         alpha_treatment=None,
         beta=None,
         theta=None,
+        gamma=None,
     ):
 
         # check for input variables
@@ -86,6 +91,9 @@ class CorpusCreation:
         self.n_docs = n_docs
         self.n_words = n_words
         self.V = V
+        self.dgp = dgp
+        
+        self.p = p
 
         # store prior parameters
         self.treatment = treatment
@@ -95,7 +103,10 @@ class CorpusCreation:
 
         # store user supplied probability distributions for words and documents
         self.init_alpha(alpha, alpha_treatment, theta)
-        self.init_beta(beta)
+        self.word_topic_dist(beta)
+        self.init_gamma(gamma)
+        self.metadata(metadata)
+        self.init_eta()
         self.init_theta(theta)
 
     def init_alpha(self, alpha, alpha_treatment, theta):
@@ -119,7 +130,7 @@ class CorpusCreation:
             self.init_treatment(alpha_treatment)
 
     def init_treatment(self, alpha_treatment):
-        assert alpha_treatment is not None, 'If treatment == True, the effect needs to be specified'
+        assert alpha_treatment is not None, 'If treatment == True, the effect needs to be specified by alpha_treatment'
         if type(alpha_treatment) == np.ndarray:
             self.alpha_treatment = alpha_treatment
         else:
@@ -128,7 +139,7 @@ class CorpusCreation:
             elif alpha_treatment == "auto-nonlinear":
                 self.alpha_treatment = np.exp(self.alpha)
 
-    def init_beta(self, beta):
+    def word_topic_dist(self, beta):
         """2D numpy array containing the word-topic distribution
 
         Args:
@@ -140,23 +151,86 @@ class CorpusCreation:
             self.beta = np.array(beta)            
             assert type(self.beta) == np.ndarray, 'beta needs to be a 2D numpy array'
 
+    def init_gamma(self, gamma, mean=None):
+        """if no value for gamma is provided, the values for k-topics are sampled from
+        a p-dimensional multivariate normal distribution with mean and sigma. 
+
+        @param: gamma (optional) 2-dimensional np.ndarray containing normally distributed values"
+        @param: mean (optional) prior mean for the topical prevalence coefficients. Defaults to None.
+
+        @return: gamma vector of dimension (K-1) x p 
+        """
+        if gamma == None:
+            if mean==None: 
+                mean = np.random.standard_normal(self.p)
+            sigma_prior = np.eye(self.p)
+            mean = np.random.multivariate_normal(mean, sigma_prior)
+            sigma = np.eye(self.p)
+            self.gamma = np.random.multivariate_normal(mean, sigma, self.K-1)
+        else: 
+            self.gamma = gamma
+
+    def metadata(self, metadata, metadata_levels=[0,1],p=None):
+        if metadata==None:
+            # simulate one-hot encoding x1==True iff x2==False
+            x1 = self.rng.choice(metadata_levels, size=int(self.n_docs), replace=True, p=None)
+            x2 = np.array([int(i==False) for i in x1])
+            self.metadata = np.column_stack((x1, x2))
+        else: 
+            assert metadata.shape == np.array(self.n_docs, self.p), 'Unexpected metadata shape provided.'
+            self.metadata = metadata
+        return 
+
+    def init_eta(self):
+        mu = self.metadata@self.gamma.T
+        sigma = np.eye(self.K-1)
+        eta = []
+        for d in range(self.n_docs):
+            eta.append(np.random.multivariate_normal(mu[d], sigma))
+        self.eta = np.array(eta)
+        return 
+
     def init_theta(self, theta):
+        """Generate documents for varying hyperprior on topical prevalence
+
+        Example: 
+        if p = 2 and k=5, we need to draw a sample of 5 for each p
+        result: how probable is each topic given p=1 and p=2 respectively.
+        result: dimension of theta_k 5 x 1 (dim(theta) = 5 x 2)
+        result: dimension of eta_k 4 x 1 (dim(eta) = 4 x 2)
+
+        # instead of fixing the mean parameter for each topic, we choose a standard normal distribution
+        # as of now, the covariance is fixed to zero and the variance is constant 1 over all topics
+
+        @param: theta (optional) to specify a N x K dimensional document-topic distribution from a fitted model. 
+        """
         # theta is a document-level parameter, i.e. it does change across documents
-        if theta == None:
-            if self.treatment == False:
-                self.theta = self.rng.dirichlet(
-                    alpha=self.alpha, size=self.n_docs
-                )  # Treatment effect (yes/no) Alpha (symmetric, asymmetric and so on...)
-            else:
-                self.theta = self.rng.dirichlet(
-                    alpha=self.alpha, size=int(self.n_docs / 2)
-                )
-                self.theta_treatment = self.rng.dirichlet(
-                    alpha=self.alpha_treatment, size=int(self.n_docs / 2)
-                )
+        if self.dgp == 'LDA':
+            if theta == None:
+                if self.treatment == False:
+                    self.theta = self.rng.dirichlet(
+                        alpha=self.alpha, size=self.n_docs
+                    )  # Treatment effect (yes/no) Alpha (symmetric, asymmetric and so on...)
+                else:
+                    self.theta = self.rng.dirichlet(
+                        alpha=self.alpha, size=int(self.n_docs / 2)
+                    )
+                    self.theta_treatment = self.rng.dirichlet(
+                        alpha=self.alpha_treatment, size=int(self.n_docs / 2)
+                    )
+        elif self.dgp == 'STM':
+            self.map_eta(eta=self.eta)
+            
         else:
+            print('Not specified data generating process. Choose from "STM" or "CTM".')
             self.theta = np.array(theta)
             assert type(self.theta) == np.ndarray, 'theta needs to be a 2D numpy array'
+
+
+    def map_eta(self, eta): 
+        eta_ = np.array(list(map(lambda x: np.insert(x,len(x),0), eta)))
+        self.theta = np.array(list(map(lambda x: stable_softmax(x), eta_)))
+        return  
 
     def generate_documents(
         self, remove_terms=True, dictionary=True, display_props=False
@@ -175,10 +249,13 @@ class CorpusCreation:
             logger.info("Create Dictionary from an simulated corpus.")
             self.dictionary()
         if display_props:
-            self.display_props
+            self.display_props()
 
     def sample_documents(self):
-        self.get_probabilities()
+        if self.dgp == 'LDA':
+            self.lda_probs()
+        if self.dgp == 'STM':
+            self.p = self.theta@self.beta
         self.documents = []
         for doc in range(self.n_docs):
             doc_words = self.rng.multinomial(self.n_words, self.p[doc], size=1)
@@ -191,7 +268,7 @@ class CorpusCreation:
                 )
             )
 
-    def get_probabilities(
+    def lda_probs(
         self,
     ):
         """define probability vectors for the multinomial word draws
@@ -203,29 +280,6 @@ class CorpusCreation:
             p = self.theta @ self.beta
             p_treatment = self.theta_treatment @ self.beta
             self.p = np.concatenate((p, p_treatment), axis=0)
-
-    # def sample_documents(self):
-
-    #     self.true_theta = np.empty(self.n_docs, dtype = object)
-
-    #     # only iff treatment == True
-    #     # generate documents by drawing words from a multinomial with dirichlet priors
-    #     for doc in range(self.n_docs):
-    #         # treatment assignment (first half of documents without treatment)
-    #         if doc < 50:
-    #             sample_theta_0 = self.rng.dirichlet(self.alpha)
-    #             p = sample_theta_0@self.sample_beta
-    #             # bookkeeping theta
-    #             self.true_theta[doc] = sample_theta_0
-    #         else:
-    #             sample_theta_1 = self.rng.dirichlet(self.alpha_treatment)
-    #             p = sample_theta_1@self.sample_beta
-    #             # bookkeeping theta
-    #             self.true_theta[doc] = sample_theta_1
-    #         doc_words = np.random.multinomial(40, p, size = 1)
-    #         # mimic corpus structure
-    #         # going from np.array([1,0,0,1,0,2]) to  [(0,1),(3,1),(5,2)] for each document
-    #         self.documents.append(list(zip(np.asarray(doc_words).nonzero()[1], doc_words[np.where(doc_words>0)])))
 
     def remove_infrequent_terms(self):
         """
@@ -249,13 +303,14 @@ class CorpusCreation:
         # create ({dict of (int, str)}
         logger.info(f"Creates a dictionary of size {self.V}...")
         self.dictionary = Dictionary.from_corpus(self.documents)
-        # create a tuple mapping: [(1, word), (2, word), ...]
-        # compare to dictionary object in gensim
 
-    # display topic proportions per document
     def display_props(self):
+        """display topic proportions per document (works up to k=3)
+        """
         # theta is now stored in self.theta (and self.theta_treatment if treatment==True)
-        plt.barh(range(int(self.n_docs)), self.theta.transpose()[0], label="p(k=1)")
+
+        # plt.barh(range(int(self.n_docs)), self.theta.transpose()[0], label="p(k=1)")
+        
         plt.barh(
             range(int(self.n_docs)),
             self.theta.transpose()[1],
@@ -271,9 +326,9 @@ class CorpusCreation:
             label="p(k=3)",
         )
         plt.title(
-            f"Topic Distribution for {self.n_docs} sample documents ({self.n_topics} topics)"
+            f"Topic Distribution for {self.n_docs} sample documents ({self.K} topics)"
         )
         plt.legend()
         timestamp = str(time.asctime()[-13:-6]).replace(":", "_")
-        plt.savefig(f"display_props_{timestamp}.png")
+        plt.savefig(f"img/display_props_{timestamp}.png")
         plt.show()
