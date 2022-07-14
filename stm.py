@@ -408,34 +408,39 @@ class STM:
                 self.covar = self.covar.astype('category')
             except:
                 pass
-            covar2D = np.array(self.covar)[:,None] #prepares 1D array for one-hot encoding (OHE) by making it 2D
-            enc = OneHotEncoder(handle_unknown='ignore') #create OHE
-            covarOHE = enc.fit_transform(covar2D).toarray() #fit OHE
+            
+            prev_cov = np.array(self.covar)[:,None] #prepares 1D array for one-hot encoding (OHE) by making it 2D
+            
+            # remove empty dimension
+            if len(prev_cov.shape)>2: 
+                prev_cov = np.squeeze(prev_cov, axis=1)
+            
+            if not np.array_equal(prev_cov, prev_cov.astype(bool)):
+                enc = OneHotEncoder(handle_unknown='ignore') #create OHE
+                prev_cov = enc.fit_transform(prev_cov).toarray() #fit OHE
             
             if self.mode not in ['lasso','ridge', 'ols']: 
                 print("Need to specify the estimation mode of prevalence covariate coefficients. Uses default 'ols'.")
  
             if self.mode == 'lasso':
-                # get maximal penalty yielding nonzero coefficients for the lasso
-                # np.abs(covarOHE.T.dot(self.eta)).max() / len(covarOHE) = 0.095
                 linear_model = sklearn.linear_model.Lasso(alpha=1, fit_intercept=intercept)
-                fitted_model = linear_model.fit(covarOHE,self.eta)
+                fitted_model = linear_model.fit(prev_cov,self.eta)
             
             elif self.mode == 'ridge':
                 linear_model = sklearn.linear_model.Ridge(alpha=.1, fit_intercept=intercept)
-                fitted_model = linear_model.fit(covarOHE,self.eta)
+                fitted_model = linear_model.fit(prev_cov,self.eta)
             
             else:
                 linear_model = sklearn.linear_model.LinearRegression(fit_intercept=intercept)
-                fitted_model = linear_model.fit(covarOHE, self.eta)
+                fitted_model = linear_model.fit(prev_cov, self.eta)
             
             # adjust design matrix if intercept is estimated
             if intercept: 
                 self.gamma = np.column_stack((fitted_model.intercept_, fitted_model.coef_))
-                design_matrix = np.c_[ np.ones(covarOHE.shape[0]), covarOHE]
+                design_matrix = np.c_[ np.ones(prev_cov.shape[0]), prev_cov]
 
             self.gamma = fitted_model.coef_
-            design_matrix = covarOHE
+            design_matrix = prev_cov
             
             self.mu = design_matrix@self.gamma.T
         

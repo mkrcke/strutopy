@@ -7,7 +7,7 @@ from gensim.parsing.preprocessing import STOPWORDS
 
 # %%
 
-df = pd.read_csv("application/data/corpus_raw.csv", index_col=0)
+df = pd.read_csv("data/corpus_raw.csv", index_col=0)
 text_corpus = list(df["text"])
 
 
@@ -36,11 +36,13 @@ BoW_corpus = [dictionary.doc2bow(doc, allow_update=True) for doc in texts]
 
 
 # %% save objects
-corpora.MmCorpus.serialize("application/data/BoW_corpus.mm", BoW_corpus)
-dictionary.save("application/data/dictionary.mm")
-df.to_csv("application/data/corpus_preproc.csv")
+corpora.MmCorpus.serialize("data/BoW_corpus.mm", BoW_corpus)
+dictionary.save("data/dictionary.mm")
+df.to_csv("data/corpus_preproc.csv")
 
 # %% how to reload the objects
-corpora.dictionary.Dictionary.load("application/data/dictionary.mm")
-corpora.MmCorpus("application/data/BoW_corpus.mm")
-pd.read_csv("application/data/corpus_preproc.csv")
+corpora.dictionary.Dictionary.load("data/dictionary.mm")
+corpora.MmCorpus("data/BoW_corpus.mm")
+pd.read_csv("data/corpus_preproc.csv")
+
+# %%
