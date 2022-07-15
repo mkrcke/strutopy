@@ -31,7 +31,7 @@ yvarlevels = set(yvar)
 betaindex = np.array(yvar.cat.codes)
 A = len(set(betaindex))
 
-interactions = False #settings.kappa
+interactions = True #settings.kappa
 verbose = True
 
 init_type = "random" #settings.init
@@ -50,7 +50,8 @@ settings = {
     },
     'verbose':verbose,
     'kappa':{
-        'interactions':False,
+        'LDAbeta': False, 
+        'interactions':True,
         'fixedintercept': True,
         'contrats': False,
         'mstep': {'tol':0.01, 'maxit':5}},
@@ -88,6 +89,6 @@ settings = {
 
 #%%
 model = STM(settings, documents, dictionary, init='random', model='STM')
-model.expectation_maximization(saving=False)
+model.expectation_maximization(saving=False, prefix='')
 
 # %%

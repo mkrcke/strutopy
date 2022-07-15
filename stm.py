@@ -14,12 +14,13 @@ from pandas import Series
 import scipy
 import sklearn.linear_model
 from scipy import optimize
+from scipy.sparse import csr_matrix
 from sklearn.preprocessing import OneHotEncoder
 from operator import itemgetter
 
 # custom packages
 from generate_docs import CorpusCreation
-from spectral_initialisation import spectral_init
+from spectral_initialisation import spectral_init, create_dtm
 
 logger = logging.getLogger(__name__)
 
@@ -66,21 +67,22 @@ class STM:
         self.init = init
         self.model = model
         self.mode = mode
-        
         # test and store user-supplied parameters
         if len(documents) is None:
             raise ValueError("documents must be specified to establish input space")
         if self.settings["dim"]["K"] == 0:
             raise ValueError("Number of topics must be specified")
-        # if self.settings["dim"]["A"] == 1:
-        #    logger.warning("no dimension for the topical content provided")
+        if self.settings["dim"]["A"] == 1:
+           logger.warning("no dimension for the topical content provided")
 
         self.V = self.settings["dim"]["V"]  # Number of words
         self.K = self.settings["dim"]["K"]  # Number of topics
-        # self.A = self.settings["dim"]["A"]  # TODO: when data changes ...
+        self.A = self.settings["dim"]["A"]  # TODO: when data changes ...
         self.N = len(self.documents)
         self.covar = settings["covariates"]["X"]
+        self.betaindex = settings["covariates"]["betaindex"]
         self.interactions = settings["kappa"]["interactions"]
+        self.LDAbeta = settings["kappa"]["LDAbeta"]
 
         # convergence settings
         self.last_bounds = []
@@ -97,7 +99,9 @@ class STM:
         self.init_mu()
         self.init_eta()
         self.init_sigma()
-        # TODO: self.init_kappa()
+        if not self.LDAbeta: 
+            self.init_kappa()
+        self.wcounts()
         self.init_theta()
 
     def init_beta(self):
@@ -123,12 +127,13 @@ class STM:
                 ]
             else:
                 self.beta = beta_init_normalized
-                # [
-                #     np.testing.assert_almost_equal(sum_over_words, 1)
-                #     for i in range(self.A)
-                #     for sum_over_words in np.sum(self.beta, axis=1)
-                # ]
+                [
+                    np.testing.assert_almost_equal(sum_over_words, 1)
+                    for i in range(self.A)
+                    for sum_over_words in np.sum(self.beta, axis=1)
+                ]
         assert self.beta.shape == (
+            self.A,
             self.K,
             self.V,
         ), "Invalid beta shape. Got shape %s, but expected (%s, %s)" % (
@@ -230,6 +235,10 @@ class STM:
             "covar": covar
             #'kappasum':, why rolling sum?
         }
+    
+    def wcounts(self): 
+        self.wcounts = np.array(create_dtm(self.documents).sum(axis=0)).flatten()
+    
     # _____________________________________________________________________
     def E_step(self):
         """
@@ -259,12 +268,19 @@ class STM:
 
         # initialize sufficient statistics
         calculated_bounds = []
-        sigma_ss = np.zeros(
-            ((self.K - 1), (self.K - 1))
-        )  # update after each document optimization
-        beta_ss = np.zeros(self.K * self.V).reshape(
-            self.K, self.V
-        )  # update after each document optimization
+        sigma_ss = np.empty_like(self.sigma)
+        # sigma_ss = np.zeros(
+        #     ((self.K - 1), (self.K - 1))
+        # )  # update after each document optimization
+        beta_ss = np.empty_like(self.beta)
+        # if A != 1:
+        #     beta_ss = np.zeros(self.K * self.V).reshape(
+        #     self.K, self.V
+        # )  # update after each document optimization
+        # else:    
+        #     beta_ss = np.zeros(self.K * self.V).reshape(
+        #         self.K, self.V
+        #     )  # update after each document optimization
         t1 = time.process_time()
         for i in range(self.N):
 
@@ -274,9 +290,9 @@ class STM:
                 :, 0
             ]  # This counts the first dimension of the numpy array, was "idx_1v"
             
-            #aspect = self.betaindex[i]
+            aspect = self.betaindex[i]
 
-            beta_doc_kv = self.get_beta(idx_1v)
+            beta_doc_kv = self.get_beta(idx_1v, aspect=aspect)
             word_count_1v = doc_array[:, 1]
 
             assert np.all(
@@ -344,7 +360,7 @@ class STM:
         )
         return beta_ss, sigma_ss
 
-    def get_beta(self, words, aspect=None):
+    def get_beta(self, words, aspect):
         """returns the topic-word distribution for a document with the respective topical content covariate (aspect)
 
         Args:
@@ -360,7 +376,7 @@ class STM:
         # if not np.all((self.beta >= 0)):
         # raise ValueError("Some entries of beta are negative.")
         if self.interactions:
-            beta_doc_kv = self.beta[aspect][:, np.array(words)]
+            beta_doc_kv = self.beta[aspect][:, np.array(np.int0(words))]
         else:
             beta_doc_kv = self.beta[:, np.array(np.int0(words))]
         return beta_doc_kv
@@ -461,7 +477,7 @@ class STM:
         sigma = (covariance + nu)/self.N
         self.sigma = np.diag(np.diag(sigma)) * sigprior + (1 - sigprior) * sigma
 
-    def update_beta(self, beta_ss, kappa=None):
+    def update_beta(self, beta_ss):
         """
         Updates the topic-word distribution
 
@@ -469,11 +485,102 @@ class STM:
             kappa (_type_, optional): topical content covariate. Defaults to None.
         """
         # computes the update for beta based on the SAGE model
-        # for now: just computes row normalized beta values
-        if kappa is None:
+        # for now: just computes row normalized beta values as a point estimate 
+        if self.LDAbeta:
             self.beta = beta_ss / np.sum(beta_ss, axis=1)[:, None]
         else:
-            print(f"implementation for {kappa} is missing")
+            self.mnreg(beta_ss=beta_ss)
+    
+    def mnreg(self, beta_ss): 
+        """estimation of distributed poisson regression for the update of the kappa parameters
+
+        @param: beta_ss (np.ndarray) estimated word-topic distribution of the current EM-iteration with dimension K x V
+        """
+        
+        contrast = False
+        interact = True
+        fixed_intercept = True
+        alpha = 250 #corresponds to `lambda` in glmnet 
+        maxit=1e4
+        tol=1e-5
+
+
+        counts = csr_matrix(np.concatenate((beta_ss[0],beta_ss[1]),axis=0)) # dimension (A*K) x V # TODO: enable dynamic creation of 'counts'
+
+        # Three cases
+        if self.A == 1: # Topic Model
+            covar = np.diag(np.ones(self.K))
+        if self.A != 1: # Topic-Aspect Models
+            # if not contrast: 
+            #Topics
+            veci = np.arange(0,counts.shape[0])
+            vecj = np.tile(np.arange(0, self.K), self.A)
+            #aspects
+            veci = np.concatenate((veci, np.arange(0, (counts.shape[0]))))
+            vecj = np.concatenate((vecj, np.repeat(np.arange(self.K+1,self.K+self.A+1), self.K)))
+            if interact: 
+                veci = np.concatenate((veci, np.arange(0,counts.shape[0])))
+                vecj = np.concatenate((vecj, np.arange(self.K+self.A+1, self.K+self.A+counts.shape[0]+1))) #TODO: remove +1 at the end, make shapes fit anyway
+            vecv = np.ones(len(veci))
+            covar = csr_matrix((vecv, (veci,vecj))) 
+
+        if fixed_intercept: 
+            m = self.wcounts
+            m = np.log(m) - np.log(np.sum(m))
+        else: 
+            m = 0 
+        
+        mult_nobs = counts.sum(axis=1)  
+        offset = np.log(mult_nobs)
+        #counts = np.split(counts, counts.shape[1], axis=1)
+
+
+        ############################
+        ### Distributed Poissons ###
+        ############################
+        out = []
+        #now iterate over the vocabulary
+        for i in range(counts.shape[1]):
+            
+            if np.all(m==0): 
+                offset2 = offset
+                fit_intercept=True
+            else: 
+                fit_intercept=False
+            offset2 = m[i] + offset
+            mod = None
+            #while mod is None: 
+            # alpha = alpha * np.floor(0.2*alpha)
+            clf = sklearn.linear_model.PoissonRegressor(fit_intercept=fit_intercept, max_iter=np.int0(maxit), tol=tol, alpha=np.int0(alpha))
+            mod = clf.fit(covar, counts[:,[1]].A.flatten())
+                #if it didn't converge, increase nlambda paths by 20% 
+                # if(is.null(mod)) nlambda <- nlambda + floor(.2*nlambda)
+            # print(f'Estimated coefficients for word {i}.')
+            # print(mod.coef_)
+            out.append(mod.coef_)
+
+        # put all regression results together
+        coef = np.stack(out, axis=1)
+        
+        # seperate intercept from the coefficients
+        if not fixed_intercept: 
+            m = coef[0]
+            coef = coef[1:]
+
+        # set kappa
+        self.kappa = coef
+        
+        ###################
+        ### predictions ###
+        ###################
+
+        linpred = covar@coef
+        linpred = m + linpred
+        explinpred = np.exp(linpred)
+        beta =  explinpred/np.sum(explinpred, axis=1)[:,np.newaxis]
+        
+        # retain former structure for beta
+        self.beta = np.split(beta, 2, axis=0)
 
     def expectation_maximization(self, saving, prefix):
         t1 = time.process_time()
@@ -726,9 +833,9 @@ class STM:
             #"documents": self.documents,
         }
         if prefix:
-            json.dump(model, open(f"{prefix}_model.json", "w"), cls=NumpyEncoder)
+            json.dump(model, open(f"fitted_models/{prefix}_model.json", "w"), cls=NumpyEncoder)
         else: 
-            json.dump(model, open("model.json", "w"), cls=NumpyEncoder)
+            json.dump(model, open("fitted_models/model.json", "w"), cls=NumpyEncoder)
     
     def label_topics(self, n, topics):
         """
@@ -748,7 +855,7 @@ class STM:
         TODO: @return labelTopics object (list) \item{prob }{matrix of highest
         probability words}
         """
-        assert n>1, 'n must be 1 or greater'
+        assert n>=1, 'n must be 1 or greater'
 
         if topics:
             K = topics

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
 from qpsolvers import solve_qp
-from scipy.sparse import diags, csr_matrix, csr_array, coo_matrix
+from scipy.sparse import diags, csr_matrix, csr_array
 from sklearn.preprocessing import normalize
 
 def spectral_init(corpus, K, V, maxV=10000, verbose=True, print_anchor=False):
@@ -61,7 +61,7 @@ def spectral_init(corpus, K, V, maxV=10000, verbose=True, print_anchor=False):
 
 def create_dtm(corpus):
     """
-    Create a sparse coo_matrix constructed from three arrays:
+    Create a sparse csr_matrix constructed from three arrays:
     
     - data[:] word counts: the entries of the matrix, in any order
     - i[:] document index: the row indices of the matrix entries
@@ -70,7 +70,7 @@ def create_dtm(corpus):
     @param: corpus in bag-of-word format -> [list of (int, int)]
         corpus (list): list containing word indices and word counts per document
 
-    @return: doc_term_matrix sparse matrix with document-term counts in coo format
+    @return: doc_term_matrix sparse matrix with document-term counts in csr format
     """
 
     word_idx = []
