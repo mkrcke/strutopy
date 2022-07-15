@@ -5,7 +5,7 @@ from qpsolvers import solve_qp
 from scipy.sparse import diags, csr_matrix, csr_array, coo_matrix
 from sklearn.preprocessing import normalize
 
-def spectral_init(corpus, K, V, maxV=None, verbose=True, print_anchor=False):
+def spectral_init(corpus, K, V, maxV=10000, verbose=True, print_anchor=False):
     """
     init='spectral' provides a deterministic initialization using the
     spectral algorithm given in Arora et al 2014.  See Roberts, Stewart and
