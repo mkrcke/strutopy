@@ -19,7 +19,7 @@ data = pd.read_csv('data/poliblogs2008.csv')
 data = data[3000:4000]
 
 #%% """ Setting control variables"""
-prevalence = 'rating'
+prevalence = ['rating','blog']
 content = 'blog'
 num_topics = 10
 

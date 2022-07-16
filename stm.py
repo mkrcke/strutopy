@@ -11,7 +11,7 @@ import time
 import numpy as np
 import numpy.random as random
 from pandas import Series
-import scipy
+import scipy as sp
 import sklearn.linear_model
 from scipy import optimize
 from scipy.sparse import csr_matrix
@@ -25,7 +25,7 @@ from spectral_initialisation import spectral_init, create_dtm
 logger = logging.getLogger(__name__)
 
 class STM:
-    def __init__(self, settings, documents, dictionary, dtype=np.float32, init='spectral', model='STM', mode='ols'):
+    def __init__(self, settings, documents, dictionary, content, dtype=np.float32, init='spectral', model='STM', mode='ols'):
         """
         @param: settings (c.f. large dictionary TODO: create settings file)
         @param: documents BoW-formatted documents in list of list of arrays with index-count tuples for each word
@@ -67,6 +67,7 @@ class STM:
         self.init = init
         self.model = model
         self.mode = mode
+        self.content = content
         # test and store user-supplied parameters
         if len(documents) is None:
             raise ValueError("documents must be specified to establish input space")
@@ -77,13 +78,13 @@ class STM:
 
         self.V = self.settings["dim"]["V"]  # Number of words
         self.K = self.settings["dim"]["K"]  # Number of topics
-        self.A = self.settings["dim"]["A"]  # TODO: when data changes ...
-        self.N = len(self.documents)
         self.covar = settings["covariates"]["X"]
-        self.betaindex = settings["covariates"]["betaindex"]
+        self.N = len(self.documents)
         self.interactions = settings["kappa"]["interactions"]
+        self.A = self.settings["dim"]["A"]  # TODO: when data changes ...
         self.LDAbeta = settings["kappa"]["LDAbeta"]
-
+        self.betaindex = settings["covariates"]["betaindex"]
+        
         # convergence settings
         self.last_bounds = []
         self.max_em_its = settings["convergence"]["max.em.its"]
@@ -99,8 +100,6 @@ class STM:
         self.init_mu()
         self.init_eta()
         self.init_sigma()
-        if not self.LDAbeta: 
-            self.init_kappa()
         self.wcounts()
         self.init_theta()
 
@@ -120,27 +119,27 @@ class STM:
             if self.interactions:  # TODO: replace ifelse condition by logic
                 self.beta = np.repeat(beta_init_normalized[None, :], self.A, axis=0)
                 # test if probabilities sum to 1
-                [
-                    np.testing.assert_almost_equal(sum_over_words, 1)
-                    for i in range(self.A)
-                    for sum_over_words in np.sum(self.beta[i], axis=1)
-                ]
+                # [
+                #     np.testing.assert_almost_equal(sum_over_words, 1)
+                #     for i in range(self.A)
+                #     for sum_over_words in np.sum(self.beta[i], axis=1)
+                # ]
             else:
                 self.beta = beta_init_normalized
-                [
-                    np.testing.assert_almost_equal(sum_over_words, 1)
-                    for i in range(self.A)
-                    for sum_over_words in np.sum(self.beta, axis=1)
-                ]
-        assert self.beta.shape == (
-            self.A,
-            self.K,
-            self.V,
-        ), "Invalid beta shape. Got shape %s, but expected (%s, %s)" % (
-            str(self.beta.shape),
-            str(self.K),
-            str(self.V),
-        )
+                # [
+                #     np.testing.assert_almost_equal(sum_over_words, 1)
+                #     for i in range(self.A)
+                #     for sum_over_words in np.sum(self.beta, axis=1)
+                # ]
+        # assert self.beta.shape == (
+        #     self.A,
+        #     self.K,
+        #     self.V,
+        # ), "Invalid beta shape. Got shape %s, but expected (%s, %s)" % (
+        #     str(self.beta.shape),
+        #     str(self.K),
+        #     str(self.V),
+        # )
 
     # TODO: Check for the shape of mu if this is correct
     def init_mu(self):
@@ -150,7 +149,6 @@ class STM:
         self.sigma = np.zeros(((self.K - 1), (self.K - 1)))
         np.fill_diagonal(self.sigma, 20)
     
-
     def init_eta(self):
         """
         dimension: N by K-1
@@ -173,69 +171,6 @@ class STM:
         """
         self.gamma = np.zeros(self.A, self.K) 
 
-    def init_kappa(self):
-        """
-        Initializing Topical Content Model Parameters
-        """
-        # read in documents and vocab
-        flat_documents = [item for sublist in self.documents for item in sublist]
-        m = []
-
-        total_sum = sum(n for _, n in flat_documents)
-
-        for elem in flat_documents:
-            m.append(elem[1] / total_sum)
-        m = np.log(m) - np.log(np.mean(m))  # logit of m
-        # Defining parameters
-        aspectmod = (
-            self.A > 1
-        )  # if there is more than one level for the topical content
-        if aspectmod:
-            interact = self.interactions  # allow for the choice to interact
-        else:
-            interact = False
-        # Create the parameters object
-        parLength = self.K + self.A * aspectmod + (self.K * self.A) * interact
-        # create covariates. one element per item in parameter list.
-        # generation by type because its conceptually simpler
-        if not aspectmod & interact:
-            covar = {
-                "k": np.arange(self.K),
-                "a": np.repeat(np.nan, parLength),  # why parLength?
-                "type": np.repeat(1, self.K),
-            }
-
-        if aspectmod & interact == False:
-            covar = {
-                "k": np.append(np.arange(self.K), np.repeat(np.nan, self.A)),
-                "a": np.append(np.repeat(np.nan, self.K), np.arange(self.A)),
-                "type": np.append(np.repeat(1, self.K), np.repeat(2, self.A)),
-            }
-        if interact:
-            covar = {
-                "k": np.append(
-                    np.arange(self.K),
-                    np.append(
-                        np.repeat(np.nan, self.A), np.repeat(np.arange(self.K), self.A)
-                    ),
-                ),
-                "a": np.append(
-                    np.repeat(np.nan, self.K),
-                    np.append(np.arange(self.A), np.repeat(np.arange(self.A), self.K)),
-                ),
-                "type": np.append(
-                    np.repeat(1, self.K),
-                    np.append(np.repeat(2, self.A), np.repeat(3, self.K * self.A)),
-                ),
-            }
-
-        self.kappa_initialized = {
-            "m": m,
-            "params": np.tile(np.repeat(0, self.V), (parLength, 1)),
-            "covar": covar
-            #'kappasum':, why rolling sum?
-        }
-    
     def wcounts(self): 
         self.wcounts = np.array(create_dtm(self.documents).sum(axis=0)).flatten()
     
@@ -264,7 +199,7 @@ class STM:
                 self.sigmaentropy = (
                     0.5 * np.linalg.slogdet(self.sigma)[1]
                 )  # part 2 of ELBO
-                self.siginv = scipy.linalg.cholesky(self.sigma)  # part 3 of ELBO
+                self.siginv = sp.linalg.cholesky(self.sigma)  # part 3 of ELBO
 
         # initialize sufficient statistics
         calculated_bounds = []
@@ -290,14 +225,18 @@ class STM:
                 :, 0
             ]  # This counts the first dimension of the numpy array, was "idx_1v"
             
-            aspect = self.betaindex[i]
+            if self.content: 
+                aspect = self.betaindex[i]
+            else: 
+                aspect = None
+            
 
             beta_doc_kv = self.get_beta(idx_1v, aspect=aspect)
             word_count_1v = doc_array[:, 1]
 
             assert np.all(
                 beta_doc_kv >= 0
-            ), "Some entries of beta are negative.  Are you sure you didn't pass the logged version of beta?"
+            ), "Some entries of beta are negative or nan.  Are you sure you didn't pass the logged version of beta?"
 
             # optimize variational posterior
             # does not matter if we use optimize.minimize(method='BFGS') or optimize fmin_bfgs()
@@ -379,6 +318,8 @@ class STM:
             beta_doc_kv = self.beta[aspect][:, np.array(np.int0(words))]
         else:
             beta_doc_kv = self.beta[:, np.array(np.int0(words))]
+        # add small value to beta for numerical stability
+        beta_doc_kv += 1e-40
         return beta_doc_kv
 
     # _____________________________________________________________________
@@ -538,6 +479,7 @@ class STM:
         ############################
         ### Distributed Poissons ###
         ############################
+        #TODO: Scaling the data for convergence
         out = []
         #now iterate over the vocabulary
         for i in range(counts.shape[1]):
@@ -665,7 +607,7 @@ class STM:
             # log(expeta * betas) * doc_cts - ndoc * log(sum(expeta))
             return np.float64((0.5 * (eta[:-1] - mu).T @ self.siginv @ (eta[:-1] - mu)) - (np.dot(
                 word_count, eta.max() + np.log(np.exp(eta - eta.max()) @ beta_doc))
-            - Ndoc * scipy.special.logsumexp(eta)))
+            - Ndoc * sp.special.logsumexp(eta)))
 
         def df(eta, word_count, mu, beta_doc):
             """gradient for the objective of the variational update q(etas)"""
@@ -724,6 +666,9 @@ class STM:
         if not np.all(np.linalg.eigvals(f)>0):
             print('Hessian not positive definite. Introduce Diagonal Dominance...')
             f = self.make_pd(f)
+            if not np.all(np.linalg.eigvals(f)>0):
+                np.fill_diagonal(f, np.diag(f)+1e-5)
+                print('Hessian not positive definite.  Adding a small prior 1e-5 for numerical stability.')
 
         return f
     
@@ -747,7 +692,7 @@ class STM:
                 L = np.linalg.cholesky(self.make_pd(hess))
                 print("converts Hessian via diagonal-dominance")
             except:
-                L = scipy.linalg.cholesky(
+                L = sp.linalg.cholesky(
                     self.make_pd(hess) + 1e-5 * np.eye(hess.shape[0])
                 )
                 print("adds a small number to the hessian")
@@ -818,6 +763,7 @@ class STM:
         a = np.multiply(beta_doc_kv.T, np.exp(eta_)).T  # KxV
         b = np.multiply(a, (np.sqrt(word_count) / np.sum(a, 0)))  # KxV
         phi = np.multiply(b, np.sqrt(word_count).T)  # KxV
+        assert np.all(phi>=0), 'Some values of phi are zero or nan.'
         return phi
 
     def save_model(self, prefix):
@@ -837,7 +783,7 @@ class STM:
         else: 
             json.dump(model, open("fitted_models/model.json", "w"), cls=NumpyEncoder)
     
-    def label_topics(self, n, topics):
+    def label_topics(self, n, topics, frexweight=0.5):
         """
         Label topics
         
@@ -845,6 +791,8 @@ class STM:
         
         Highest Prob: are the words within each topic with the highest probability
         (inferred directly from topic-word distribution parameter beta)
+        FREX: weights exclusivity and frequency scores to get more meaningful topic labels. 
+        (Bischof and Airoldi 2012 for more details.)
         
         @param model STM model object.
         @param topics number of topics to include.  Default
@@ -863,21 +811,49 @@ class STM:
             K = self.K
         
         vocab = self.dictionary
+        wordcounts = self.wcounts
 
-        # wordcounts = model.settings["dim"]["wcounts"]["x"] #TODO: implement word counts
+        frex = self.frex(w = frexweight)
         
         # Sort by word probabilities on each row of beta
         # Returns words with highest probability per topic
         problabels = np.argsort(-1*self.beta)[:n]
+        frexlabels = np.argsort(-1*frex)[:n]
 
-        out = []
+        out_prob = []
+        out_frex = []
+    
         for k in range(K):
             probwords = [itemgetter(i)(vocab) for i in problabels[k,:n]]
+            frexwords = [itemgetter(i)(vocab) for i in frexlabels[k,:n]]
             print(f"Topic {k}:\n \t Highest Prob: {probwords}")
-            out.append(probwords)
+            print(f"Topic {k}:\n \t FREX: {frexwords}")
+            out_prob.append(probwords)
+            out_frex.append(frexwords)
         
         return
+    
+    def frex(self, w=0.5):
+        """Calculate FREX (FRequency and EXclusivity) words
+        A primarily internal function for calculating FREX words.
+        Exclusivity is calculated by column-normalizing the beta matrix (thus representing the conditional probability of seeing
+        the topic given the word).  Then the empirical CDF of the word is computed within the topic.  Thus words with
+        high values are those where most of the mass for that word is assigned to the given topic.
 
+        @param logbeta a K by V matrix containing the log probabilities of seeing word v conditional on topic k
+        @param w a value between 0 and 1 indicating the proportion of the weight assigned to frequency 
+
+        """
+        beta = np.log(self.beta)
+        log_exclusivity = beta - sp.special.logsumexp(beta, axis=0)
+        exclusivity_ecdf = np.apply_along_axis(self.ecdf, 1, log_exclusivity)
+        freq_ecdf = np.apply_along_axis(self.ecdf, 1, beta)
+        out = 1. / (w / exclusivity_ecdf + (1 - w) / freq_ecdf)
+        return out
+
+    def ecdf(self, arr):
+        """Calculate the ECDF values for all elements in a 1D array."""
+        return sp.stats.rankdata(arr, method='max') / arr.size
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):

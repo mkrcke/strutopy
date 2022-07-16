@@ -21,19 +21,22 @@ settings = {
         'K': 20,
         'V' : len(dictionary), 
         'N' : len(corpus),
+        'A' : None
     },
     'verbose':True,
     'kappa':{
+        'LDAbeta': True,
         'interactions':False,
         'fixedintercept': True,
-        'contrats': False,
+        'contrast': False,
         'mstep': {'tol':0.01, 'maxit':5}},
     'convergence':{
-        'max.em.its':5,
+        'max.em.its':6,
         'em.converge.thresh':1e-5,
         'allow.neg.change':True,},
     'covariates':{
-        'X':xmat,}, # this is were the topical prevalence covariates are included 
+        'X':xmat,
+        'betaindex': None}, # this is were the topical prevalence covariates are included 
     'gamma':{
         'prior':np.nan, #sigma in the topical prevalence model
         'enet':1, #regularization term
@@ -44,6 +47,7 @@ settings = {
         'ngroups':1,},
 }
 # %%
-model = STM(settings, corpus, dictionary, init='spectral', model='STM')
-model.expectation_maximization(saving=True, prefix='wiki')
-# %%
+model = STM(settings, corpus, dictionary, init='random', model='STM', content = False)
+model.expectation_maximization(saving=False, prefix='wiki')
+# %% FREX score
+model.frex()
