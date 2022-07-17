@@ -32,8 +32,7 @@ settings = {
         'mstep': {'tol':0.01, 'maxit':5}},
     'convergence':{
         'max.em.its':6,
-        'em.converge.thresh':1e-5,
-        'allow.neg.change':True,},
+        'em.converge.thresh':1e-5}
     'covariates':{
         'X':xmat,
         'betaindex': None}, # this is were the topical prevalence covariates are included 
@@ -50,4 +49,4 @@ settings = {
 model = STM(settings, corpus, dictionary, init='random', model='STM', content = False)
 model.expectation_maximization(saving=False, prefix='wiki')
 # %% FREX score
-model.frex()
+model.label_topics(n=20, topics=20)

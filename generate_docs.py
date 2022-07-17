@@ -64,9 +64,29 @@ class CorpusCreation:
     A simulated text corpus as a bag-of-words. Each document is represented by a combination of word index and word count.
     Each tuple represents a document. Each document is represented by index-word pairs (tuples).
 
-    dtype: list of tuples
+    dtype: list of tuples (Ex.: [((1,2)(5,1)(7,2)), ((3,1)(4,1)(9,2)), ((4,1)(6,1)(9,1))]
 
-    Example: [((1,2)(5,1)(7,2)), ((3,1)(4,1)(9,2)), ((4,1)(6,1)(9,1))]
+    Usage Example: Create synthetic corpus
+    ------------------------------------------------------------------------------------------------------------------
+    np.random.seed(12345)
+    
+    # Initialize corpus object
+    Corpus = CorpusCreation(
+        n_topics = 10,
+        n_docs=1000,
+        n_words=100,
+        V=5000,
+        dgp='STM'
+        )
+    
+    # Generate synthetic documents based on the data generating process
+    Corpus.generate_documents()
+    
+    
+    print('Number of unique tokens: %d' % len(Corpus.dictionary))
+    print('Number of documents: %d' % len(Corpus.documents))
+
+    
     """
 
     def __init__(
