@@ -11,11 +11,13 @@ from gensim import corpora
 from gensim.corpora.dictionary import Dictionary
 
 from generate_docs import CorpusCreation
-from heldout import find_k
+from heldout import find_k, eval_heldout
 from stm import STM
 
 ARTIFACTS_ROOT_DIR = "artifacts"
 LEVEL = 2
+N_WORDS = 100
+N_DOCS = 2000
 
 # %%
 
@@ -83,6 +85,10 @@ list_of_k_values = list(map(int, list_of_k_values))
 TOTAL_N_CORPUS = 3
 TRAIN_TEST_PROPORTION = 0.8
 LIST_OF_GAMMA_FACTORS = [2]
+TREATMENT = False
+ALPHA = "symmetric"
+DGP = "STM"
+
 
 for K in list_of_k_values:
     for gamma_factor in LIST_OF_GAMMA_FACTORS:
@@ -92,16 +98,12 @@ for K in list_of_k_values:
         with open(os.path.join(input_dir, "stm_config.json")) as f:
             stm_config = json.load(f)
 
-        n_words = 100  # Hier was überlegen
-        n_docs = stm_config.get("number_of_docs")
+        #n_docs = stm_config.get("number_of_docs")
         V = stm_config.get("length_dictionary")
         beta = np.load(os.path.join(input_dir, "beta_hat.npy"))
         gamma = np.load(os.path.join(input_dir, "gamma_hat.npy")) * gamma_factor
-        metadata = np.load(os.path.join(input_dir, "X.npy"))
+        # metadata = np.load(os.path.join(input_dir, "X.npy")) # won't use, since doc_length does not match
 
-        treatment = False
-        alpha = "symmetric"
-        dgp = "STM"
 
         for n in range(TOTAL_N_CORPUS):
 
@@ -110,18 +112,18 @@ for K in list_of_k_values:
             os.makedirs(output_dir, exist_ok=True)
 
             input_config = {
-                "n_docs": n_docs,
-                "n_words": n_words,
+                "n_docs": N_DOCS,
+                "n_words": N_WORDS,
                 "n_topics": K,
                 "V": V,
                 "level": LEVEL,
-                "treatment": treatment,
-                "alpha": alpha,
-                "dgp": dgp,
+                "treatment": TREATMENT,
+                "alpha": ALPHA,
+                "dgp": DGP,
             }
 
             Corpus = CorpusCreation(
-                beta=beta, gamma=gamma, metadata=metadata, **input_config
+                beta=beta, gamma=gamma, **input_config
             )
 
             Corpus.generate_documents()
@@ -137,9 +139,10 @@ for K in list_of_k_values:
             validation_docs_path = os.path.join(output_dir, "validation_docs.pickle")
             test_1_docs_path = os.path.join(output_dir, "test_1_docs.pickle")
             test_2_docs_path = os.path.join(output_dir, "test_2_docs.pickle")
+            metadata_path = os.path.join(output_dir, "metadata")
 
-            Corpus.dictionary.save(dictionary_path)
 
+            
             with open(input_config_path, "w") as f:
                 json.dump(input_config, f)
 
@@ -152,8 +155,8 @@ for K in list_of_k_values:
             with open(test_docs_path, "wb") as f:
                 pickle.dump(Corpus.test_docs, f)
 
-            with open(validation_docs_path, "wb") as f:
-                pickle.dump(Corpus.validation_docs, f)
+            # with open(validation_docs_path, "wb") as f:
+            #     pickle.dump(Corpus.validation_docs, f)
 
             with open(test_1_docs_path, "wb") as f:
                 pickle.dump(Corpus.test_1_docs, f)
@@ -161,23 +164,17 @@ for K in list_of_k_values:
             with open(test_2_docs_path, "wb") as f:
                 pickle.dump(Corpus.test_2_docs, f)
 
+            np.save(metadata_path, Corpus.metadata)
 
-# %%
+# %% Train and evaluate models________________________________________________________________________
 
 
 kappa_interactions = False
 lda_beta = True
 beta_index = None
-max_em_iter = 6
+max_em_iter = 2
 sigma_prior = 0
 convergence_threshold = 1e-5
-
-# X = np load X vermutlich reference model oder neu abspeichern beim Step davor
-
-# take beta from model trained on train + test set
-# beta_train_corpus = pickle load train, test + np.concatenate((train, test))
-
-# Get K from folder or input_config.json
 
 corpus_artifact_path = f"{ARTIFACTS_ROOT_DIR}/corpus"
 
@@ -188,13 +185,35 @@ for k_gamma_combination in os.listdir(corpus_artifact_path):
         corpus_dir_path = os.path.join(
             corpus_artifact_path, k_gamma_combination, corpus_dir
         )
-        print(corpus_dir_path)
 
         K = int(corpus_dir_path.split("_")[1])
-        gamma_factor = int(corpus_dir_path.split("_")[-1])
+        gamma_factor = int(corpus_dir_path.split("_")[-2].split("/")[0])
 
+        #locations
+        train_docs_path = os.path.join(corpus_dir_path, "train_docs.pickle")
+        test_docs_path = os.path.join(corpus_dir_path, "test_docs.pickle")
+        test_1_docs_path = os.path.join(corpus_dir_path, "test_1_docs.pickle")
+        test_2_docs_path = os.path.join(corpus_dir_path, "test_2_docs.pickle")
+        metadata_path = os.path.join(corpus_dir_path,"metadata.npy")
+        #load from location
+        with open(f"{train_docs_path}", 'rb') as f:
+            train_corpus = pickle.load(f)
+        with open(f"{test_docs_path}", 'rb') as f:
+            test_corpus = pickle.load(f)
+        with open(f"{test_1_docs_path}", 'rb') as f:
+            test_1_corpus = pickle.load(f)
+        with open(f"{test_2_docs_path}", 'rb') as f:
+            test_2_corpus = pickle.load(f)
+        
+        X = np.load(metadata_path)
+        
+        # Prepare corpora for model training
+        beta_train_corpus = [*train_corpus, *test_corpus] # unpack both iterables in a list literal
+        theta_train_corpus = [*train_corpus, *test_1_corpus] # unpack both iterables in a list literal
+        heldout_corpus = test_2_corpus
+          
         for model_type in ["STM", "CTM"]:
-
+            
             stm_config = {
                 "model_type": model_type,
                 "content": False,
@@ -204,23 +223,58 @@ for k_gamma_combination in os.listdir(corpus_artifact_path):
                 "max_em_iter": max_em_iter,
                 "sigma_prior": sigma_prior,
                 "convergence_threshold": convergence_threshold,
-                "init_type": "random",
-            }
+                "init_type": "spectral",
+                }
 
             # extract covariates corresponding to the training corpus
-            X_train = X[: len(beta_train_corpus)]
 
             # initialize dictionaries for different corpora
             model_beta_dictionary = Dictionary.from_corpus(beta_train_corpus)
-
+            model_theta_dictionary = Dictionary.from_corpus(theta_train_corpus)
             # initialize models for theta and beta
-            model = STM(
+            model_beta = STM(
                 documents=beta_train_corpus,
                 dictionary=model_beta_dictionary,
-                X=xmat,
+                X=X[: len(beta_train_corpus)],
                 **stm_config,
             )
+            model_theta=STM(
+                documents=theta_train_corpus,
+                dictionary=model_theta_dictionary,
+                X=X[: len(theta_train_corpus)],
+                **stm_config,
+            )
+            
+            # Train model to retrieve beta and theta (document completion approach)
+            print(f'Fitting {model_type} for K={K} and Gamma-Factor {gamma_factor}...')
+            model_beta.expectation_maximization(saving=True, output_dir=corpus_dir_path)
+            model_theta.expectation_maximization(saving=True, output_dir=corpus_dir_path)
 
-            model.expectation_maximization(saving=True, output_dir=output_dir)
+            # Save Likelihood
+            print(f'Evaluate the heldout likelihood on the remaining words...')
+            heldout_llh = eval_heldout(test_2_corpus, theta=model_theta.theta, beta=model_beta.beta)
+            
+            model_type_path = os.path.join(corpus_dir_path,model_type)
+            os.makedirs(model_type_path, exist_ok=True)
+            
+            heldout_path = os.path.join(corpus_dir_path,model_type, 'heldout')
+            config_path = os.path.join(corpus_dir_path,model_type, 'config')
+            print(f'Saving into {model_type_path}.')
+            np.save(heldout_path, np.array(heldout_llh))
+            with open(config_path, "w") as f:
+                json.dump(stm_config, f)
+            
 
-            # Save beta
+# %% Evaluation
+
+# for each combination of K and Gamma: 
+# for each model in ["STM", "CTM"]
+# for each corpus in 1:50: 
+# np.load(heldout_likelihood) and append to a list 
+
+for k_gamma_combination in os.listdir(corpus_artifact_path):
+    for corpus_dir in os.listdir(
+        os.path.join(corpus_artifact_path, k_gamma_combination)
+    ):
+    print(corpus_dir)
+    for model in ["STM","CTM"]

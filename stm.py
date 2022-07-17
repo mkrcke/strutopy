@@ -7,10 +7,12 @@ import os
 import pickle
 
 # import matplotlib.pyplot as plt
+import warnings
 import time
 from operator import itemgetter
 
 import numpy as np
+import math
 import numpy.random as random
 import scipy as sp
 import sklearn.linear_model
@@ -25,7 +27,7 @@ from generate_docs import CorpusCreation
 from spectral_initialisation import create_dtm, spectral_init
 
 logger = logging.getLogger(__name__)
-
+# warnings.filterwarnings("error")
 
 class STM:
     def __init__(
@@ -48,16 +50,16 @@ class STM:
         mode="ols",
     ):
         """
-        @param: settings (c.f. large dictionary TODO: create settings file)
         @param: documents BoW-formatted documents in list of list of arrays with index-count tuples for each word
                 example: `[[(1,3),(3,2)],[(1,1),(4,2)]]` -> [list of (int, int)]
         @param: dictionary contains word-indices of the corpus
-        @param: dtype (default=np.float32) used for value checking along the process
+        @param: content {dtype=bool} specifies whether topical content model is included or not 
         @param: init (default='spectral') init method to be used to initialise the word-topic distribution beta.
                 One might choose between 'random' and 'spectral', however the spectral initialisation is recommended
         @param: model (default='STM') to update variational mean parameter for the topical prevalence. Choose between
                 'STM' and 'CTM'. Note, however, that 'CTM' updates ignore the topical prevalence model.
         @param: mode (default='ols') to estimate the prevalence coefficients (gamma). Otherwise choose between l1 & l2 norm.
+        @param: dtype (default=np.float32) used for value checking along the process
 
         @return:initialised values for the algorithm specifications parameters
                     - covar: topical prevalence covariates
@@ -77,6 +79,8 @@ class STM:
                     - theta: simplex mapped version of eta representing the document-topic distribution (N x K)
                     - kappa: prior on topical content covariates
         """
+
+        random.seed(123)
 
         self.dtype = np.finfo(dtype).dtype
 
@@ -116,6 +120,8 @@ class STM:
 
         # initialise
         self.init_params()
+
+        
 
     # _____________________________________________________________________
     def init_params(self):
@@ -227,18 +233,8 @@ class STM:
         # initialize sufficient statistics
         calculated_bounds = []
         sigma_ss = np.empty_like(self.sigma)
-        # sigma_ss = np.zeros(
-        #     ((self.K - 1), (self.K - 1))
-        # )  # update after each document optimization
         beta_ss = np.empty_like(self.beta)
-        # if A != 1:
-        #     beta_ss = np.zeros(self.K * self.V).reshape(
-        #     self.K, self.V
-        # )  # update after each document optimization
-        # else:
-        #     beta_ss = np.zeros(self.K * self.V).reshape(
-        #         self.K, self.V
-        #     )  # update after each document optimization
+
         t1 = time.process_time()
         for i in range(self.N):
 
@@ -255,10 +251,12 @@ class STM:
 
             beta_doc_kv = self.get_beta(idx_1v, aspect=aspect)
             word_count_1v = doc_array[:, 1]
-
-            assert np.all(
-                beta_doc_kv >= 0
-            ), "Some entries of beta are negative or nan.  Are you sure you didn't pass the logged version of beta?"
+            try: 
+                assert np.all(
+                    beta_doc_kv >= 0
+                ), "Some entries of beta are negative or nan."
+            except: 
+                print(i)
 
             # optimize variational posterior
             # does not matter if we use optimize.minimize(method='BFGS') or optimize fmin_bfgs()
@@ -295,7 +293,8 @@ class STM:
             nu = self.optimize_nu(L_i)
 
             # Delta Phi
-            phi = self.update_z(
+            
+            self.update_z(
                 eta=self.eta[i],
                 beta_doc_kv=beta_doc_kv,
                 word_count=word_count_1v,
@@ -308,9 +307,12 @@ class STM:
             sigma_ss += nu
             # TODO: combine into one
             if self.interactions:
-                beta_ss[aspect][:, np.array(np.int0(idx_1v))] += phi
+                beta_ss[aspect][:, np.array(np.int0(idx_1v))] += self.phi
             else:
-                beta_ss[:, np.array(np.int0(idx_1v))] += phi
+                try:
+                    beta_ss[:, np.array(np.int0(idx_1v))] += self.phi
+                except RuntimeWarning:
+                    breakpoint()
 
         self.bound = np.sum(calculated_bounds)
         self.last_bounds.append(self.bound)
@@ -343,7 +345,7 @@ class STM:
         else:
             beta_doc_kv = self.beta[:, np.array(np.int0(words))]
         # add small value to beta for numerical stability
-        beta_doc_kv += 1e-40
+        # beta_doc_kv += 1e-10
         return beta_doc_kv
 
     # _____________________________________________________________________
@@ -457,15 +459,18 @@ class STM:
 
     def update_beta(self, beta_ss):
         """
-        Updates the topic-word distribution
-
-        Args:
-            kappa (_type_, optional): topical content covariate. Defaults to None.
+        Updates the topic-word distribution beta
+    
+        @param: beta_ss (dtype:np.ndarray) sufficient statistic for word-topic distribution
+        
+        if self.LDAbeta == True: Row-normalization of beta for the update
+        if self.LDAbeta == False: Distributed Poisson Regression for the updates
         """
-        # computes the update for beta based on the SAGE model
-        # for now: just computes row normalized beta values as a point estimate
         if self.LDAbeta:
             self.beta = beta_ss / np.sum(beta_ss, axis=1)[:, None]
+            self.beta[self.beta<0] = 1e-20
+            if np.any(self.beta == np.nan):
+                self.beta = np.nan_to_num(self.beta)
         else:
             self.mnreg(beta_ss=beta_ss)
 
@@ -639,7 +644,7 @@ class STM:
         """Optimizes the variational parameter eta given the likelihood and the gradient function"""
 
         def f(eta, word_count, mu, beta_doc):
-            """objective for the variational update q(eta)
+            """Objective for the variational update q(eta)
 
             Args:
                 eta (_type_): mean topic distribution of document d
@@ -667,7 +672,7 @@ class STM:
             )
 
         def df(eta, word_count, mu, beta_doc):
-            """gradient for the objective of the variational update q(etas)"""
+            """Gradient for the objective of the variational update q(etas)"""
             eta = np.insert(eta, self.K - 1, 0)
             # formula
             return np.array(
@@ -707,6 +712,16 @@ class STM:
         return M
 
     def hessian(self, eta, word_count, beta_doc_kv):
+        """Computes the hessian matrix for the objective function. 
+        
+        Args:
+            eta (np.ndarray): document specific prior on topical prevalence of dimension 1 x K 
+            word_count (np.ndarray): document specific vector of word counts of dimension 1 x V_doc  
+            beta_doc_kv (np.ndarray): document specific word-topic distribution of dimension K x V_doc
+
+        Returns:
+            f: (negative) Hessian matrix as specified in Roberts et al. (2016b) 
+        """
         eta_ = np.insert(eta, self.K - 1, 0)
         theta = self.stable_softmax(eta_)
 
@@ -826,9 +841,9 @@ class STM:
         eta_ = np.insert(eta, self.K - 1, 0)
         a = np.multiply(beta_doc_kv.T, np.exp(eta_)).T  # KxV
         b = np.multiply(a, (np.sqrt(word_count) / np.sum(a, 0)))  # KxV
-        phi = np.multiply(b, np.sqrt(word_count).T)  # KxV
-        assert np.all(phi >= 0), "Some values of phi are zero or nan."
-        return phi
+        self.phi = np.multiply(b, np.sqrt(word_count).T)  # KxV
+        assert np.all(self.phi >= 0), "Some values of phi are zero or nan."
+        #return phi
 
     def save_model(self, output_dir):
 
@@ -837,8 +852,9 @@ class STM:
         beta_output_path = os.path.join(output_dir, "beta_hat")
         np.save(beta_output_path, self.beta)
 
-        gamma_output_path = os.path.join(output_dir, "gamma_hat")
-        np.save(gamma_output_path, self.gamma)
+        if self.model_type=='STM':
+            gamma_output_path = os.path.join(output_dir, "gamma_hat")
+            np.save(gamma_output_path, self.gamma)
 
         theta_output_path = os.path.join(output_dir, "theta_hat")
         np.save(theta_output_path, self.theta)
@@ -856,6 +872,7 @@ class STM:
         np.save(X_output_path, self.X)
 
         lower_bound_path = os.path.join(output_dir, "lower_bound.pickle")
+
         with open(lower_bound_path, "wb") as f:
             pickle.dump(self.last_bounds, f)
 

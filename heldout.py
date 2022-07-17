@@ -79,7 +79,7 @@ def eval_heldout(heldout, theta, beta):
     per_word_ll = np.sum(word_ll)/np.sum(np.array(doc)[:,1])
     doc_ll.append(per_word_ll)
   
-  return doc_ll, np.mean(doc_ll)
+  return np.mean(doc_ll)
 
 
 def train_models(beta_train_corpus, theta_train_corpus, K, model, settings):

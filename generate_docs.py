@@ -23,7 +23,8 @@ class CorpusCreation:
     """
     Class to simulate documents for topic model evaluation. For simulation,
     one can either use LDAs data generating process described by Blei et al. (2003), or
-    STMs data generating process described by Roberts et al. (2016).
+    STMs data generating process described by Roberts et al. (2016). As of now, the Corpus creation class
+    is limited generating two boolean topical prevalence covariates. 
 
     Input
     ------------------------------------------------------------------------------------------------------------------
@@ -56,7 +57,7 @@ class CorpusCreation:
 
     @param: beta {dtype: ndarray}, optional: 2D-array providing topic-word-distributions with dimension KxV (global parameter)
     @param: theta {dtype: ndarray}, optional: 2D-array providing topic proportions with dimension NxK (document-level parameter)
-    @param: p (list[]): list of levels for the categorical metadata features.
+    @param: level {dtype: int} count of topical prevalence covariates  
 
     Returns
     ------------------------------------------------------------------------------------------------------------------
@@ -76,7 +77,8 @@ class CorpusCreation:
         n_docs=1000,
         n_words=100,
         V=5000,
-        dgp='STM'
+        dgp='STM',
+        level=2, 
         )
     
     # Generate synthetic documents based on the data generating process
@@ -202,7 +204,9 @@ class CorpusCreation:
             x1 = self.rng.choice(
                 metadata_levels, size=int(self.n_docs), replace=True, p=None
             )
-            x2 = np.array([int(i == False) for i in x1])
+            x2 = self.rng.choice(
+                metadata_levels, size=int(self.n_docs), replace=True, p=None
+            )
             self.metadata = np.column_stack((x1, x2))
         else:
             assert metadata.shape == (
@@ -361,26 +365,25 @@ class CorpusCreation:
         plt.savefig(f"img/display_props_{timestamp}.png")
         plt.show()
 
-    def split_corpus(self, proportion=0.8):
-        test_split_idx = int(proportion * len(self.documents))
-        validate_split_idx = int(
-            (proportion + (1 - proportion) / 2) * len(self.documents)
-        )
-
+    def split_corpus(self, validation_set=False, document_completion=True, proportion=0.8):
         assert type(self.documents) == list
+        
+        test_split_idx = int(proportion * len(self.documents))
+        self.train_docs = self.documents[:test_split_idx]
+            
+        if validation_set:
+            validate_split_idx = int(
+                (proportion + (1 - proportion) / 2) * len(self.documents)
+            )
+            self.test_docs = self.documents[test_split_idx:validate_split_idx]
+            self.validate_docs = self.documents[validate_split_idx:]
 
-        train = self.documents[:test_split_idx]
-        test = self.documents[test_split_idx:validate_split_idx]
-        validate = self.documents[validate_split_idx:]
+        else: 
+            self.test_docs = self.documents[test_split_idx:]
 
-        self.train_docs = train
-        self.test_docs = test
-        self.validation_docs = validate
+        if document_completion:
+            self.test_1_docs, self.test_2_docs = self.cut_in_half(self.test_docs)
 
-        test_1, test_2 = self.cut_in_half(self.test_docs)
-
-        self.test_1_docs = test_1
-        self.test_2_docs = test_2
 
     def cut_in_half(self, doc_set):
         """function to split a set of documents in two parts
