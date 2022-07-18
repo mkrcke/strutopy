@@ -1848,3 +1848,70 @@
 07/18/2022 10:07:45 AM maximum number of iterations (25) reached after 532.8870358467102 seconds
 07/18/2022 10:07:45 AM saving model to artifacts/reference_model/90
 07/18/2022 10:07:45 AM Save model to artifacts/reference_model/90/stm_config.json
+07/18/2022 02:12:08 PM loaded corpus index from artifacts/wiki_data/BoW_corpus.mm.index
+07/18/2022 02:12:08 PM initializing cython corpus reader from artifacts/wiki_data/BoW_corpus.mm
+07/18/2022 02:12:08 PM accepted corpus with 1136 documents, 24731 features, 89236 non-zero entries
+07/18/2022 02:12:08 PM loading Dictionary object from artifacts/wiki_data/dictionary.mm
+07/18/2022 02:12:08 PM Dictionary lifecycle event {'fname': 'artifacts/wiki_data/dictionary.mm', 'datetime': '2022-07-18T14:12:08.098468', 'gensim': '4.2.0', 'python': '3.10.5 | packaged by conda-forge | (main, Jun 14 2022, 07:09:13) [Clang 13.0.1 ]', 'platform': 'macOS-12.1-x86_64-i386-64bit', 'event': 'loaded'}
+07/18/2022 02:24:52 PM Fit STM on the reference corpus assuming 5 topics
+07/18/2022 02:26:22 PM loaded corpus index from artifacts/wiki_data/BoW_corpus.mm.index
+07/18/2022 02:26:22 PM initializing cython corpus reader from artifacts/wiki_data/BoW_corpus.mm
+07/18/2022 02:26:22 PM accepted corpus with 1136 documents, 24731 features, 89236 non-zero entries
+07/18/2022 02:26:22 PM loading Dictionary object from artifacts/wiki_data/dictionary.mm
+07/18/2022 02:26:22 PM Dictionary lifecycle event {'fname': 'artifacts/wiki_data/dictionary.mm', 'datetime': '2022-07-18T14:26:22.569641', 'gensim': '4.2.0', 'python': '3.10.5 | packaged by conda-forge | (main, Jun 14 2022, 07:09:13) [Clang 13.0.1 ]', 'platform': 'macOS-12.1-x86_64-i386-64bit', 'event': 'loaded'}
+07/18/2022 02:27:38 PM Fit STM on the reference corpus assuming 5 topics
+07/18/2022 02:27:53 PM Fit STM for 5 topics
+07/18/2022 02:27:53 PM ––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+07/18/2022 02:27:53 PM E-Step iteration 0
+07/18/2022 02:27:57 PM Lower Bound: -2135050.33320955
+07/18/2022 02:27:57 PM Completed E-Step in 4.265 seconds. 
+
+07/18/2022 02:27:57 PM M-Step iteration 0
+07/18/2022 02:27:57 PM Completed M-Step in 0.007 seconds. 
+
+07/18/2022 02:27:57 PM E-Step iteration 1
+07/18/2022 02:28:06 PM Lower Bound: -1022226.6315426223
+07/18/2022 02:28:06 PM Completed E-Step in 8.401 seconds. 
+
+07/18/2022 02:28:06 PM M-Step iteration 1
+07/18/2022 02:28:06 PM Completed M-Step in 0.001 seconds. 
+
+07/18/2022 02:28:06 PM relative change: 0.5212166122538464
+07/18/2022 02:28:06 PM E-Step iteration 2
+07/18/2022 02:28:14 PM Lower Bound: -1021761.1903298174
+07/18/2022 02:28:14 PM Completed E-Step in 8.185 seconds. 
+
+07/18/2022 02:28:14 PM M-Step iteration 2
+07/18/2022 02:28:14 PM Completed M-Step in 0.001 seconds. 
+
+07/18/2022 02:28:14 PM relative change: 0.0004553209615587883
+07/18/2022 02:28:14 PM E-Step iteration 3
+07/18/2022 02:28:22 PM Lower Bound: -1020352.3519263586
+07/18/2022 02:28:22 PM Completed E-Step in 8.24 seconds. 
+
+07/18/2022 02:28:22 PM M-Step iteration 3
+07/18/2022 02:28:22 PM Completed M-Step in 0.002 seconds. 
+
+07/18/2022 02:28:22 PM relative change: 0.0013788333485282836
+07/18/2022 02:28:22 PM E-Step iteration 4
+07/18/2022 02:28:31 PM Lower Bound: -1018453.36100229
+07/18/2022 02:28:31 PM Completed E-Step in 8.389 seconds. 
+
+07/18/2022 02:28:31 PM M-Step iteration 4
+07/18/2022 02:28:31 PM Completed M-Step in 0.001 seconds. 
+
+07/18/2022 02:28:31 PM relative change: 0.001861112899366027
+07/18/2022 02:28:31 PM E-Step iteration 5
+07/18/2022 02:28:39 PM Lower Bound: -1014308.1961077744
+07/18/2022 02:28:39 PM Completed E-Step in 8.323 seconds. 
+
+07/18/2022 02:28:39 PM M-Step iteration 5
+07/18/2022 02:28:39 PM Completed M-Step in 0.002 seconds. 
+
+07/18/2022 02:28:39 PM relative change: 0.004070058633255694
+07/18/2022 02:28:39 PM E-Step iteration 6
+07/18/2022 02:28:58 PM loaded corpus index from artifacts/wiki_data/BoW_corpus.mm.index
+07/18/2022 02:28:58 PM initializing cython corpus reader from artifacts/wiki_data/BoW_corpus.mm
+07/18/2022 02:28:58 PM accepted corpus with 1136 documents, 24731 features, 89236 non-zero entries
+07/18/2022 02:28:58 PM loading Dictionary object from artifacts/wiki_data/dictionary.mm
+07/18/2022 02:28:58 PM Dictionary lifecycle event {'fname': 'artifacts/wiki_data/dictionary.mm', 'datetime': '2022-07-18T14:28:58.511341', 'gensim': '4.2.0', 'python': '3.10.5 | packaged by conda-forge | (main, Jun 14 2022, 07:09:13) [Clang 13.0.1 ]', 'platform': 'macOS-12.1-x86_64-i386-64bit', 'event': 'loaded'}

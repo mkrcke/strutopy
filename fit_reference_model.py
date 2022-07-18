@@ -1,19 +1,25 @@
+# %%
 import json
+import logging
 import os
+
 import numpy as np
 import pandas as pd
 from gensim import corpora
+from joblib import Parallel, delayed
+
 from stm import STM
-import logging
+from utils import chunkIt
 
 logging.basicConfig(
-    format='%(asctime)s %(message)s',
-    datefmt='%m/%d/%Y %I:%M:%S %p',
-    filename='logfiles/fit_reference_model.log',
-    encoding='utf-8',
-    level=logging.INFO)
+    format="%(asctime)s %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S %p",
+    filename="logfiles/fit_reference_model.log",
+    encoding="utf-8",
+    level=logging.INFO,
+)
 
-# specify root directory
+# %% specify root directory
 ARTIFACTS_ROOT_DIR = "artifacts"
 
 # load reference corpus & corresponding dictionary
@@ -23,28 +29,35 @@ dictionary = corpora.Dictionary.load(f"{ARTIFACTS_ROOT_DIR}/wiki_data/dictionary
 # specify metadata as topical prevalence covariates
 xmat = np.array(data.loc[:, ["statistics", "ml"]])
 
-SEED = 12345 #random seed
+SEED = 12345  # random seed
 np.random.seed(SEED)
 
 # fit the model for K = 10,...,100 for a fixed seed (with spectral initialisation)
 # and save it to artifacts/reference_model/K
 
-for K in [10,20,30,40,50,60,70,80,90]:
 
+# %%
+def fit_reference_model(K):
     output_dir = f"{ARTIFACTS_ROOT_DIR}/reference_model/{K}"
 
-    os.makedirs(output_dir, exist_ok=False)
+    try:
+        os.makedirs(output_dir, exist_ok=False)
+
+    except:
+        print("dir exists. Not created. ")
     logging.info(f"Fit STM on the reference corpus assuming {K} topics")
-    kappa_interactions = False # no topical content
-    lda_beta = True # no topical content
-    beta_index = None # no topical content
-    max_em_iter = 25 # maximum number of iterations for the EM-algorithm
-    sigma_prior = 0 # prior on sigma, for update of the global covariance matrix
-    convergence_threshold = 1e-5 # convergence treshold, in accordance to Roberts et al. 
+    kappa_interactions = False  # no topical content
+    lda_beta = True  # no topical content
+    beta_index = None  # no topical content
+    max_em_iter = 25  # maximum number of iterations for the EM-algorithm
+    sigma_prior = 0  # prior on sigma, for update of the global covariance matrix
+    convergence_threshold = (
+        1e-5  # convergence treshold, in accordance to Roberts et al.
+    )
 
     stm_config = {
         "init_type": "spectral",
-        "model_type":"STM",
+        "model_type": "STM",
         "K": K,
         "convergence_threshold": convergence_threshold,
         "lda_beta": True,
@@ -56,11 +69,11 @@ for K in [10,20,30,40,50,60,70,80,90]:
         # mode="ols",
     }
 
-    # fit STM 10 times on the reference corpora with the settings specified above
+    # fit STM on the reference corpora with the settings specified above
     model = STM(documents=corpus, dictionary=dictionary, X=xmat, **stm_config)
     model.expectation_maximization(saving=True, output_dir=output_dir)
 
-    logging.info(f'Save model to {output_dir}/stm_config.json')
+    logging.info(f"Save model to {output_dir}/stm_config.json")
     stm_config_path = os.path.join(output_dir, "stm_config.json")
 
     # Bookkeep corpus settings if input data changes
@@ -73,3 +86,21 @@ for K in [10,20,30,40,50,60,70,80,90]:
 
     with open(stm_config_path, "w") as f:
         json.dump(stm_config, f)
+
+
+# %% parallization
+
+# topics
+t = [10, 20, 30, 40, 50, 60, 70, 80, 90]
+cores_to_use = 5
+# split according to maximal cores_to_use
+t_split = chunkIt(t, float(len(t) / cores_to_use))
+
+# %%
+
+for ll in range(len(t_split)):
+    Parallel(n_jobs=len(t_split[ll]), verbose=51)(
+        delayed(fit_reference_model)(K=k) for k in t_split[ll]
+    )
+
+# %%

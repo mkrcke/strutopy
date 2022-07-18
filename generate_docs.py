@@ -24,7 +24,7 @@ class CorpusCreation:
     Class to simulate documents for topic model evaluation. For simulation,
     one can either use LDAs data generating process described by Blei et al. (2003), or
     STMs data generating process described by Roberts et al. (2016). As of now, the Corpus creation class
-    is limited generating two boolean topical prevalence covariates. 
+    is limited generating two boolean topical prevalence covariates.
 
     Input
     ------------------------------------------------------------------------------------------------------------------
@@ -57,7 +57,7 @@ class CorpusCreation:
 
     @param: beta {dtype: ndarray}, optional: 2D-array providing topic-word-distributions with dimension KxV (global parameter)
     @param: theta {dtype: ndarray}, optional: 2D-array providing topic proportions with dimension NxK (document-level parameter)
-    @param: level {dtype: int} count of topical prevalence covariates  
+    @param: level {dtype: int} count of topical prevalence covariates
 
     Returns
     ------------------------------------------------------------------------------------------------------------------
@@ -70,7 +70,7 @@ class CorpusCreation:
     Usage Example: Create synthetic corpus
     ------------------------------------------------------------------------------------------------------------------
     np.random.seed(12345)
-    
+
     # Initialize corpus object
     Corpus = CorpusCreation(
         n_topics = 10,
@@ -78,17 +78,17 @@ class CorpusCreation:
         n_words=100,
         V=5000,
         dgp='STM',
-        level=2, 
+        level=2,
         )
-    
+
     # Generate synthetic documents based on the data generating process
     Corpus.generate_documents()
-    
-    
+
+
     print('Number of unique tokens: %d' % len(Corpus.dictionary))
     print('Number of documents: %d' % len(Corpus.documents))
 
-    
+
     """
 
     def __init__(
@@ -255,7 +255,9 @@ class CorpusCreation:
             self.map_eta(eta=self.eta)
 
         else:
-            logger.WARNING('Not specified data generating process. Choose from "STM" or "CTM".')
+            logger.WARNING(
+                'Not specified data generating process. Choose from "STM" or "CTM".'
+            )
             self.theta = np.array(theta)
             assert type(self.theta) == np.ndarray, "theta needs to be a 2D numpy array"
 
@@ -280,7 +282,7 @@ class CorpusCreation:
             self.remove_infrequent_terms()
         if dictionary:
             logger.info("Create Dictionary from an simulated corpus.")
-            self.dictionary()
+            self.create_dictionary()
         if display_props:
             self.display_props()
 
@@ -331,7 +333,7 @@ class CorpusCreation:
             self.documents[i] = list(zip(new_idx, values))
         self.V = len(wcounts)
 
-    def dictionary(self):
+    def create_dictionary(self):
         # create ({dict of (int, str)}
         logger.info(f"Build dictionary of size {self.V}...")
         self.dictionary = Dictionary.from_corpus(self.documents)
@@ -364,12 +366,14 @@ class CorpusCreation:
         plt.savefig(f"img/display_props_{timestamp}.png")
         plt.show()
 
-    def split_corpus(self, validation_set=False, document_completion=True, proportion=0.8):
+    def split_corpus(
+        self, validation_set=False, document_completion=True, proportion=0.8
+    ):
         assert type(self.documents) == list
-        
+
         test_split_idx = int(proportion * len(self.documents))
         self.train_docs = self.documents[:test_split_idx]
-            
+
         if validation_set:
             validate_split_idx = int(
                 (proportion + (1 - proportion) / 2) * len(self.documents)
@@ -377,12 +381,11 @@ class CorpusCreation:
             self.test_docs = self.documents[test_split_idx:validate_split_idx]
             self.validate_docs = self.documents[validate_split_idx:]
 
-        else: 
+        else:
             self.test_docs = self.documents[test_split_idx:]
 
         if document_completion:
             self.test_1_docs, self.test_2_docs = self.cut_in_half(self.test_docs)
-
 
     def cut_in_half(self, doc_set):
         """function to split a set of documents in two parts
