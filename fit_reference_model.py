@@ -43,7 +43,7 @@ for K in [10,20,30,40,50,60,70,80,90]:
     convergence_threshold = 1e-5 # convergence treshold, in accordance to Roberts et al. 
 
     stm_config = {
-        "init_type": "random",
+        "init_type": "spectral",
         "model_type":"STM",
         "K": K,
         "convergence_threshold": convergence_threshold,

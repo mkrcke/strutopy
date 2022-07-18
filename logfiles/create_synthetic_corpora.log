@@ -1,0 +1,236 @@
+07/18/2022 10:57:14 AM Setting: K = 50 and Gamma Factor = 1
+07/18/2022 10:57:14 AM Create corpus for K=50 topics.
+07/18/2022 10:57:17 AM removes 548 words due to no occurence
+07/18/2022 11:00:41 AM Setting: K = 50 and Gamma Factor = 1
+07/18/2022 11:00:41 AM Create corpus for K=50 topics.
+07/18/2022 11:00:44 AM removes 548 words due to no occurence
+07/18/2022 11:02:48 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:02:48 AM Build dictionary of size 24183...
+07/18/2022 11:02:48 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:02:49 AM built Dictionary(24183 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:02:49 AM Created corpus 0.
+07/18/2022 11:02:49 AM Split corpus 0 into train/test.
+07/18/2022 11:02:49 AM Saving corpus 0 to artifacts/corpus/K_50_gamma_factor_1/corpus_0.
+07/18/2022 11:02:49 AM Saving metadata for corpus 0 to artifacts/corpus/K_50_gamma_factor_1/corpus_0.
+07/18/2022 11:02:51 AM Create corpus for K=50 topics.
+07/18/2022 11:02:54 AM removes 533 words due to no occurence
+07/18/2022 11:04:53 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:04:53 AM Build dictionary of size 24198...
+07/18/2022 11:04:53 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:04:54 AM built Dictionary(24198 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:04:54 AM Created corpus 1.
+07/18/2022 11:04:54 AM Split corpus 1 into train/test.
+07/18/2022 11:04:54 AM Saving corpus 1 to artifacts/corpus/K_50_gamma_factor_1/corpus_1.
+07/18/2022 11:04:54 AM Saving metadata for corpus 1 to artifacts/corpus/K_50_gamma_factor_1/corpus_1.
+07/18/2022 11:04:56 AM Create corpus for K=50 topics.
+07/18/2022 11:04:59 AM removes 571 words due to no occurence
+07/18/2022 11:06:59 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:06:59 AM Build dictionary of size 24160...
+07/18/2022 11:06:59 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:06:59 AM built Dictionary(24160 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:06:59 AM Created corpus 2.
+07/18/2022 11:06:59 AM Split corpus 2 into train/test.
+07/18/2022 11:06:59 AM Saving corpus 2 to artifacts/corpus/K_50_gamma_factor_1/corpus_2.
+07/18/2022 11:06:59 AM Saving metadata for corpus 2 to artifacts/corpus/K_50_gamma_factor_1/corpus_2.
+07/18/2022 11:07:02 AM Create corpus for K=50 topics.
+07/18/2022 11:07:05 AM removes 551 words due to no occurence
+07/18/2022 11:09:11 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:09:11 AM Build dictionary of size 24180...
+07/18/2022 11:09:11 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:09:11 AM built Dictionary(24180 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:09:11 AM Created corpus 3.
+07/18/2022 11:09:11 AM Split corpus 3 into train/test.
+07/18/2022 11:09:11 AM Saving corpus 3 to artifacts/corpus/K_50_gamma_factor_1/corpus_3.
+07/18/2022 11:09:11 AM Saving metadata for corpus 3 to artifacts/corpus/K_50_gamma_factor_1/corpus_3.
+07/18/2022 11:09:14 AM Create corpus for K=50 topics.
+07/18/2022 11:09:18 AM removes 547 words due to no occurence
+07/18/2022 11:11:22 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:11:22 AM Build dictionary of size 24184...
+07/18/2022 11:11:22 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:11:23 AM built Dictionary(24184 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:11:23 AM Created corpus 4.
+07/18/2022 11:11:23 AM Split corpus 4 into train/test.
+07/18/2022 11:11:23 AM Saving corpus 4 to artifacts/corpus/K_50_gamma_factor_1/corpus_4.
+07/18/2022 11:11:23 AM Saving metadata for corpus 4 to artifacts/corpus/K_50_gamma_factor_1/corpus_4.
+07/18/2022 11:11:26 AM Create corpus for K=50 topics.
+07/18/2022 11:11:29 AM removes 587 words due to no occurence
+07/18/2022 11:13:35 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:13:35 AM Build dictionary of size 24144...
+07/18/2022 11:13:35 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:13:35 AM built Dictionary(24144 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:13:35 AM Created corpus 5.
+07/18/2022 11:13:35 AM Split corpus 5 into train/test.
+07/18/2022 11:13:35 AM Saving corpus 5 to artifacts/corpus/K_50_gamma_factor_1/corpus_5.
+07/18/2022 11:13:35 AM Saving metadata for corpus 5 to artifacts/corpus/K_50_gamma_factor_1/corpus_5.
+07/18/2022 11:13:38 AM Create corpus for K=50 topics.
+07/18/2022 11:13:41 AM removes 565 words due to no occurence
+07/18/2022 11:15:44 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:15:44 AM Build dictionary of size 24166...
+07/18/2022 11:15:44 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:15:45 AM built Dictionary(24166 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:15:45 AM Created corpus 6.
+07/18/2022 11:15:45 AM Split corpus 6 into train/test.
+07/18/2022 11:15:45 AM Saving corpus 6 to artifacts/corpus/K_50_gamma_factor_1/corpus_6.
+07/18/2022 11:15:45 AM Saving metadata for corpus 6 to artifacts/corpus/K_50_gamma_factor_1/corpus_6.
+07/18/2022 11:15:48 AM Create corpus for K=50 topics.
+07/18/2022 11:15:51 AM removes 591 words due to no occurence
+07/18/2022 11:17:55 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:17:55 AM Build dictionary of size 24140...
+07/18/2022 11:17:55 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:17:55 AM built Dictionary(24140 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:17:55 AM Created corpus 7.
+07/18/2022 11:17:55 AM Split corpus 7 into train/test.
+07/18/2022 11:17:55 AM Saving corpus 7 to artifacts/corpus/K_50_gamma_factor_1/corpus_7.
+07/18/2022 11:17:55 AM Saving metadata for corpus 7 to artifacts/corpus/K_50_gamma_factor_1/corpus_7.
+07/18/2022 11:17:58 AM Create corpus for K=50 topics.
+07/18/2022 11:18:01 AM removes 570 words due to no occurence
+07/18/2022 11:20:10 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:20:10 AM Build dictionary of size 24161...
+07/18/2022 11:20:10 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:20:10 AM built Dictionary(24161 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:20:10 AM Created corpus 8.
+07/18/2022 11:20:10 AM Split corpus 8 into train/test.
+07/18/2022 11:20:10 AM Saving corpus 8 to artifacts/corpus/K_50_gamma_factor_1/corpus_8.
+07/18/2022 11:20:10 AM Saving metadata for corpus 8 to artifacts/corpus/K_50_gamma_factor_1/corpus_8.
+07/18/2022 11:20:13 AM Create corpus for K=50 topics.
+07/18/2022 11:20:16 AM removes 595 words due to no occurence
+07/18/2022 11:22:24 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:22:24 AM Build dictionary of size 24136...
+07/18/2022 11:22:24 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:22:24 AM built Dictionary(24136 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:22:24 AM Created corpus 9.
+07/18/2022 11:22:24 AM Split corpus 9 into train/test.
+07/18/2022 11:22:24 AM Saving corpus 9 to artifacts/corpus/K_50_gamma_factor_1/corpus_9.
+07/18/2022 11:22:24 AM Saving metadata for corpus 9 to artifacts/corpus/K_50_gamma_factor_1/corpus_9.
+07/18/2022 11:22:27 AM Create corpus for K=50 topics.
+07/18/2022 11:22:31 AM removes 518 words due to no occurence
+07/18/2022 11:24:37 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:24:37 AM Build dictionary of size 24213...
+07/18/2022 11:24:37 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:24:37 AM built Dictionary(24213 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:24:37 AM Created corpus 10.
+07/18/2022 11:24:37 AM Split corpus 10 into train/test.
+07/18/2022 11:24:37 AM Saving corpus 10 to artifacts/corpus/K_50_gamma_factor_1/corpus_10.
+07/18/2022 11:24:37 AM Saving metadata for corpus 10 to artifacts/corpus/K_50_gamma_factor_1/corpus_10.
+07/18/2022 11:24:40 AM Create corpus for K=50 topics.
+07/18/2022 11:24:43 AM removes 571 words due to no occurence
+07/18/2022 11:26:49 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:26:49 AM Build dictionary of size 24160...
+07/18/2022 11:26:49 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:26:49 AM built Dictionary(24160 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:26:49 AM Created corpus 11.
+07/18/2022 11:26:49 AM Split corpus 11 into train/test.
+07/18/2022 11:26:49 AM Saving corpus 11 to artifacts/corpus/K_50_gamma_factor_1/corpus_11.
+07/18/2022 11:26:49 AM Saving metadata for corpus 11 to artifacts/corpus/K_50_gamma_factor_1/corpus_11.
+07/18/2022 11:26:52 AM Create corpus for K=50 topics.
+07/18/2022 11:26:56 AM removes 595 words due to no occurence
+07/18/2022 11:29:11 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:29:11 AM Build dictionary of size 24136...
+07/18/2022 11:29:11 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:29:11 AM built Dictionary(24136 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:29:11 AM Created corpus 12.
+07/18/2022 11:29:11 AM Split corpus 12 into train/test.
+07/18/2022 11:29:11 AM Saving corpus 12 to artifacts/corpus/K_50_gamma_factor_1/corpus_12.
+07/18/2022 11:29:11 AM Saving metadata for corpus 12 to artifacts/corpus/K_50_gamma_factor_1/corpus_12.
+07/18/2022 11:29:15 AM Create corpus for K=50 topics.
+07/18/2022 11:29:18 AM removes 587 words due to no occurence
+07/18/2022 11:31:32 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:31:32 AM Build dictionary of size 24144...
+07/18/2022 11:31:32 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:31:33 AM built Dictionary(24144 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:31:33 AM Created corpus 13.
+07/18/2022 11:31:33 AM Split corpus 13 into train/test.
+07/18/2022 11:31:33 AM Saving corpus 13 to artifacts/corpus/K_50_gamma_factor_1/corpus_13.
+07/18/2022 11:31:33 AM Saving metadata for corpus 13 to artifacts/corpus/K_50_gamma_factor_1/corpus_13.
+07/18/2022 11:31:36 AM Create corpus for K=50 topics.
+07/18/2022 11:31:40 AM removes 598 words due to no occurence
+07/18/2022 11:33:53 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:33:53 AM Build dictionary of size 24133...
+07/18/2022 11:33:53 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:33:53 AM built Dictionary(24133 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:33:53 AM Created corpus 14.
+07/18/2022 11:33:53 AM Split corpus 14 into train/test.
+07/18/2022 11:33:53 AM Saving corpus 14 to artifacts/corpus/K_50_gamma_factor_1/corpus_14.
+07/18/2022 11:33:53 AM Saving metadata for corpus 14 to artifacts/corpus/K_50_gamma_factor_1/corpus_14.
+07/18/2022 11:33:57 AM Create corpus for K=50 topics.
+07/18/2022 11:34:00 AM removes 556 words due to no occurence
+07/18/2022 11:36:16 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:36:16 AM Build dictionary of size 24175...
+07/18/2022 11:36:16 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:36:16 AM built Dictionary(24175 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:36:16 AM Created corpus 15.
+07/18/2022 11:36:16 AM Split corpus 15 into train/test.
+07/18/2022 11:36:16 AM Saving corpus 15 to artifacts/corpus/K_50_gamma_factor_1/corpus_15.
+07/18/2022 11:36:16 AM Saving metadata for corpus 15 to artifacts/corpus/K_50_gamma_factor_1/corpus_15.
+07/18/2022 11:36:20 AM Create corpus for K=50 topics.
+07/18/2022 11:36:24 AM removes 577 words due to no occurence
+07/18/2022 11:38:41 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:38:41 AM Build dictionary of size 24154...
+07/18/2022 11:38:41 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:38:41 AM built Dictionary(24154 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:38:41 AM Created corpus 16.
+07/18/2022 11:38:41 AM Split corpus 16 into train/test.
+07/18/2022 11:38:41 AM Saving corpus 16 to artifacts/corpus/K_50_gamma_factor_1/corpus_16.
+07/18/2022 11:38:41 AM Saving metadata for corpus 16 to artifacts/corpus/K_50_gamma_factor_1/corpus_16.
+07/18/2022 11:38:46 AM Create corpus for K=50 topics.
+07/18/2022 11:38:49 AM removes 589 words due to no occurence
+07/18/2022 11:41:07 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:41:07 AM Build dictionary of size 24142...
+07/18/2022 11:41:07 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:41:07 AM built Dictionary(24142 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:41:07 AM Created corpus 17.
+07/18/2022 11:41:07 AM Split corpus 17 into train/test.
+07/18/2022 11:41:07 AM Saving corpus 17 to artifacts/corpus/K_50_gamma_factor_1/corpus_17.
+07/18/2022 11:41:07 AM Saving metadata for corpus 17 to artifacts/corpus/K_50_gamma_factor_1/corpus_17.
+07/18/2022 11:41:12 AM Create corpus for K=50 topics.
+07/18/2022 11:41:15 AM removes 587 words due to no occurence
+07/18/2022 11:43:33 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:43:33 AM Build dictionary of size 24144...
+07/18/2022 11:43:33 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:43:33 AM built Dictionary(24144 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:43:33 AM Created corpus 18.
+07/18/2022 11:43:33 AM Split corpus 18 into train/test.
+07/18/2022 11:43:33 AM Saving corpus 18 to artifacts/corpus/K_50_gamma_factor_1/corpus_18.
+07/18/2022 11:43:33 AM Saving metadata for corpus 18 to artifacts/corpus/K_50_gamma_factor_1/corpus_18.
+07/18/2022 11:43:37 AM Create corpus for K=50 topics.
+07/18/2022 11:43:41 AM removes 564 words due to no occurence
+07/18/2022 11:45:58 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:45:58 AM Build dictionary of size 24167...
+07/18/2022 11:45:58 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:45:58 AM built Dictionary(24167 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:45:58 AM Created corpus 19.
+07/18/2022 11:45:58 AM Split corpus 19 into train/test.
+07/18/2022 11:45:58 AM Saving corpus 19 to artifacts/corpus/K_50_gamma_factor_1/corpus_19.
+07/18/2022 11:45:58 AM Saving metadata for corpus 19 to artifacts/corpus/K_50_gamma_factor_1/corpus_19.
+07/18/2022 11:46:04 AM Create corpus for K=50 topics.
+07/18/2022 11:46:07 AM removes 633 words due to no occurence
+07/18/2022 11:48:27 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:48:27 AM Build dictionary of size 24098...
+07/18/2022 11:48:27 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:48:27 AM built Dictionary(24098 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:48:27 AM Created corpus 20.
+07/18/2022 11:48:27 AM Split corpus 20 into train/test.
+07/18/2022 11:48:27 AM Saving corpus 20 to artifacts/corpus/K_50_gamma_factor_1/corpus_20.
+07/18/2022 11:48:27 AM Saving metadata for corpus 20 to artifacts/corpus/K_50_gamma_factor_1/corpus_20.
+07/18/2022 11:48:30 AM Create corpus for K=50 topics.
+07/18/2022 11:48:34 AM removes 610 words due to no occurence
+07/18/2022 11:50:47 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:50:47 AM Build dictionary of size 24121...
+07/18/2022 11:50:47 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:50:48 AM built Dictionary(24121 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:50:48 AM Created corpus 21.
+07/18/2022 11:50:48 AM Split corpus 21 into train/test.
+07/18/2022 11:50:48 AM Saving corpus 21 to artifacts/corpus/K_50_gamma_factor_1/corpus_21.
+07/18/2022 11:50:48 AM Saving metadata for corpus 21 to artifacts/corpus/K_50_gamma_factor_1/corpus_21.
+07/18/2022 11:50:51 AM Create corpus for K=50 topics.
+07/18/2022 11:50:54 AM removes 561 words due to no occurence
+07/18/2022 11:53:03 AM Create Dictionary from an simulated corpus.
+07/18/2022 11:53:03 AM Build dictionary of size 24170...
+07/18/2022 11:53:03 AM adding document #0 to Dictionary(0 unique tokens: [])
+07/18/2022 11:53:03 AM built Dictionary(24170 unique tokens: ['0', '1', '2', '3', '4']...) from 2000 documents (total 400000 corpus positions)
+07/18/2022 11:53:03 AM Created corpus 22.
+07/18/2022 11:53:03 AM Split corpus 22 into train/test.
+07/18/2022 11:53:03 AM Saving corpus 22 to artifacts/corpus/K_50_gamma_factor_1/corpus_22.
+07/18/2022 11:53:03 AM Saving metadata for corpus 22 to artifacts/corpus/K_50_gamma_factor_1/corpus_22.
+07/18/2022 11:53:05 AM Create corpus for K=50 topics.
+07/18/2022 11:53:08 AM removes 570 words due to no occurence
