@@ -16,7 +16,7 @@ from stm import STM
 
 ARTIFACTS_ROOT_DIR = "artifacts"
 LEVEL = 2
-N_WORDS = 100
+N_WORDS = 200
 N_DOCS = 2000
 
 # %%
@@ -30,33 +30,34 @@ dictionary = corpora.Dictionary.load(f"{ARTIFACTS_ROOT_DIR}/wiki_data/dictionary
 xmat = np.array(data.loc[:, ["statistics", "ml"]])
 
 
-for K in [10, 20, 30, 40]:
+for K in [10,20,30,40,50,60,70,80,90]:
 
     output_dir = f"{ARTIFACTS_ROOT_DIR}/reference_model/{K}"
 
     os.makedirs(output_dir, exist_ok=True)
 
-    kappa_interactions = False
-    lda_beta = True
-    beta_index = None
-    max_em_iter = 6
-    sigma_prior = 0
-    convergence_threshold = 1e-5
+    kappa_interactions = False # no topical content
+    lda_beta = True # no topical content
+    beta_index = None # no topical content
+    max_em_iter = 20 # maximum number of iterations (before the model converges)
+    sigma_prior = 0 # prior on sigma, for update of the global covariance matrix
+    convergence_threshold = 1e-5 # convergence treshold, in accordance to Roberts et al. 
 
     stm_config = {
-        "content": False,
+        "init_type": "random",
+        "model_type":"STM",
         "K": K,
-        "kappa_interactions": False,
+        "convergence_threshold": convergence_threshold,
         "lda_beta": True,
         "max_em_iter": max_em_iter,
+        "kappa_interactions": False,
         "sigma_prior": sigma_prior,
-        "convergence_threshold": convergence_threshold,
+        "content": False,
         # dtype: np.float32,
-        "init_type": "random",
-        # model_type="STM",
         # mode="ols",
     }
 
+    # fit STM 10 times on the reference corpora with the settings specified above
     model = STM(documents=corpus, dictionary=dictionary, X=xmat, **stm_config)
     model.expectation_maximization(saving=True, output_dir=output_dir)
 

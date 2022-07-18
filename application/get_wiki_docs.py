@@ -1,14 +1,14 @@
-# %%
+#
 import pandas as pd
 import wikipedia
 
-# %% get references from statistics and Machine Learning
+# get references from statistics and Machine Learning
 
 mp1 = wikipedia.page("Statistics")
 mp2 = wikipedia.page("Machinelearning")
 
 
-# %% delete non meaningful pages
+# delete non meaningful pages
 mp1_links = mp1.links
 mp2_links = mp2.links
 
@@ -95,15 +95,6 @@ mp1_links = [x for x in mp1_links if x not in non_meaninfull_link]
 mp2_links = [x for x in mp2_links if x not in non_meaninfull_link]
 
 
-# %% investigation of mainpages
-
-# len(mp1.links)
-# len(mp2.links)
-# mp1.summary
-# mp2.summary
-
-# %% get summaries of subpages
-
 list_errors = []
 
 list_pageid = []
@@ -142,8 +133,8 @@ for link in mp2_links:
         list_pageid.append(sp.pageid)
         list_text.append(sp.summary)
         list_title.append(sp.title)
-        list_statistics.append(1)
-        list_ml.append(0)
+        list_statistics.append(0)
+        list_ml.append(1)
     except:
         try:
             link_c = link.replace(" ", "")
@@ -151,18 +142,16 @@ for link in mp2_links:
             list_pageid.append(sp.pageid)
             list_text.append(sp.summary)
             list_title.append(sp.title)
-            list_statistics.append(1)
-            list_ml.append(0)
+            list_statistics.append(0)
+            list_ml.append(1)
 
         except:
             print(link)
             list_errors.append(link)
 
-# %% substitute non-found
-list_errors
+# substitute non-found
+# list_errors
 
-
-# %%
 
 corpus_with_metadata = pd.DataFrame(
     {
@@ -174,13 +163,13 @@ corpus_with_metadata = pd.DataFrame(
     }
 )
 
-# %% check for duplicates
+# check for duplicates
 
 mask = corpus_with_metadata.duplicated(subset=["pageid"], keep=False)
 corpus_with_metadata.loc[mask, ["statistics", "ml"]] = 1
 corpus_with_metadata.drop_duplicates(inplace=True)
 
 
-# %% save file
+# save file
 
 corpus_with_metadata.to_csv("application/data/wiki_corpus.csv")

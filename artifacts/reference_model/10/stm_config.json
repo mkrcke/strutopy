@@ -1,1 +1,0 @@
-{"content": false, "K": 10, "kappa_interactions": false, "lda_beta": true, "max_em_iter": 6, "sigma_prior": 0, "convergence_threshold": 1e-05, "init_type": "random", "length_dictionary": 24731, "number_of_docs": 1136}

@@ -108,8 +108,6 @@ class CorpusCreation:
         gamma=None,
     ):
 
-        # check for input variables
-
         # store corpus settings
         self.K = n_topics
         self.n_docs = n_docs
@@ -257,7 +255,7 @@ class CorpusCreation:
             self.map_eta(eta=self.eta)
 
         else:
-            print('Not specified data generating process. Choose from "STM" or "CTM".')
+            logger.WARNING('Not specified data generating process. Choose from "STM" or "CTM".')
             self.theta = np.array(theta)
             assert type(self.theta) == np.ndarray, "theta needs to be a 2D numpy array"
 
@@ -275,6 +273,7 @@ class CorpusCreation:
             dictionary (bool, optional): Want to create a gensim dictionary from the simulated corpus? Defaults to True.
             display_props (bool, optional): Want to display topic proportions per document? Defaults to False.
         """
+        logger.info(f"Create corpus for K={self.K} topics.")
         self.sample_documents()
 
         if remove_terms:
@@ -322,7 +321,7 @@ class CorpusCreation:
             [np.repeat(x[0], x[1]) for sublist in self.documents for x in sublist]
         )
         wcounts = np.sort(np.unique(wcountvec))
-        print(f"removes {self.V-len(wcounts)} words due to no occurence")
+        logger.info(f"removes {self.V-len(wcounts)} words due to no occurence")
         # create new indices using a mapping
         map_idx = list(zip(np.arange(len(wcounts)), wcounts))
         for i in range(len(self.documents)):
@@ -334,7 +333,7 @@ class CorpusCreation:
 
     def dictionary(self):
         # create ({dict of (int, str)}
-        logger.info(f"Creates a dictionary of size {self.V}...")
+        logger.info(f"Build dictionary of size {self.V}...")
         self.dictionary = Dictionary.from_corpus(self.documents)
 
     def display_props(self):
@@ -393,7 +392,7 @@ class CorpusCreation:
         @return: first_half returns the set with every other word removed (starting at index 0)
         @return: second_half returns the set with every other word removed (starting at index 1)
         """
-        first_half = np.empty(len(doc_set), dtype=np.ndarray)
+        first_half = np.zeros(len(doc_set), dtype=np.ndarray)
         second_half = np.zeros(len(doc_set), dtype=np.ndarray)
 
         for doc in range(len(doc_set)):

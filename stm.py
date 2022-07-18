@@ -1,5 +1,4 @@
 # %%
-
 import json
 import logging
 import math
@@ -27,7 +26,6 @@ from generate_docs import CorpusCreation
 from spectral_initialisation import create_dtm, spectral_init
 
 logger = logging.getLogger(__name__)
-# warnings.filterwarnings("error")
 
 class STM:
     def __init__(
@@ -80,12 +78,11 @@ class STM:
                     - kappa: prior on topical content covariates
         """
 
-        random.seed(123)
+        random.seed(123456)
 
         self.dtype = np.finfo(dtype).dtype
 
         # Specify Corpus & Settings
-        # TODO: Unit test for corpus structure
         self.documents = documents
         self.dictionary = dictionary
         self.init = init_type
@@ -116,12 +113,10 @@ class STM:
         if self.K == 0:
             raise ValueError("Number of topics must be specified")
         if self.A == 1:
-            logger.warning("no dimension for the topical content provided")
+            logging.warning("no dimension for the topical content provided")
 
         # initialise
         self.init_params()
-
-        
 
     # _____________________________________________________________________
     def init_params(self):
@@ -143,10 +138,11 @@ class STM:
                 * matrix of shape (num_topics, num_words) to assign a probability for each word-topic combination.
         """
         if self.init == "spectral":
-            self.beta = spectral_init(self.documents, self.K, self.V, maxV=5000)
+            self.beta = spectral_init(self.documents, self.K, self.V, maxV=5000, verbose=False)
         elif self.init == "random":
             beta_init = random.gamma(0.1, 1, self.V * self.K).reshape(self.K, self.V)
-            beta_init_normalized = beta_init / np.sum(beta_init, axis=1)[:, None]
+            row_sums = np.sum(beta_init, axis=1)[:, None]
+            beta_init_normalized = np.divide(beta_init,row_sums, out=np.zeros_like(beta_init), where=row_sums!=0)
             if self.interactions:  # TODO: replace ifelse condition by logic
                 self.beta = np.repeat(beta_init_normalized[None, :], self.A, axis=0)
                 # test if probabilities sum to 1
@@ -213,7 +209,6 @@ class STM:
             beta_ss: np.array of shape (k, v) but might need A
             bound: might be implemented as list len(#iterations)
         """
-        iter = 0
         # 2) Precalculate common components
         while True:
             try:
@@ -222,7 +217,7 @@ class STM:
                 self.siginv = np.linalg.inv(sigobj).T * np.linalg.inv(sigobj)
                 break
             except:
-                print(
+                logging.ERROR(
                     "Cholesky Decomposition failed, because Sigma is not positive definite."
                 )
                 self.sigmaentropy = (
@@ -232,10 +227,11 @@ class STM:
 
         # initialize sufficient statistics
         calculated_bounds = []
-        sigma_ss = np.empty_like(self.sigma)
-        beta_ss = np.empty_like(self.beta)
+        sigma_ss = np.zeros(shape=self.sigma.shape)
+        beta_ss = np.zeros(shape=self.beta.shape)
 
-        t1 = time.process_time()
+        start_time = time.time()
+
         for i in range(self.N):
 
             # set document specs
@@ -251,12 +247,9 @@ class STM:
 
             beta_doc_kv = self.get_beta(idx_1v, aspect=aspect)
             word_count_1v = doc_array[:, 1]
-            try: 
-                assert np.all(
+            assert np.all(
                     beta_doc_kv >= 0
                 ), "Some entries of beta are negative or nan."
-            except: 
-                print(i)
 
             # optimize variational posterior
             # does not matter if we use optimize.minimize(method='BFGS') or optimize fmin_bfgs()
@@ -316,13 +309,9 @@ class STM:
 
         self.bound = np.sum(calculated_bounds)
         self.last_bounds.append(self.bound)
-
-        print(f"Lower Bound: {self.bound}")
-        print(
-            "Completed E-Step in ({} seconds). \n".format(
-                math.floor((time.process_time() - t1))
-            )
-        )
+        elapsed_time = np.round((time.time() - start_time), 3)
+        logging.info(f"Lower Bound: {self.bound}")
+        logging.info(f"Completed E-Step in {elapsed_time} seconds. \n")
         return beta_ss, sigma_ss
 
     def get_beta(self, words, aspect):
@@ -348,24 +337,20 @@ class STM:
         # beta_doc_kv += 1e-10
         return beta_doc_kv
 
-    # _____________________________________________________________________
     def M_step(self, beta_ss, sigma_ss):
         # Run M-Step
 
-        t1 = time.process_time()
+        start_time = time.time()
 
         self.update_mu()
 
         self.update_sigma(nu=sigma_ss, sigprior=self.sigma_prior)
 
         self.update_beta(beta_ss)
+        
+        elapsed_time = np.round((time.time() - start_time), 3)
+        logging.info(f"Completed M-Step in {elapsed_time} seconds. \n")
 
-        print(
-            "Completed M-Step ({} seconds). \n".format(
-                math.floor((time.process_time() - t1))
-            )
-        )
-        print("___________________________________________________")
 
     def update_mu(self, intercept=False):
         """
@@ -467,10 +452,10 @@ class STM:
         if self.LDAbeta == False: Distributed Poisson Regression for the updates
         """
         if self.LDAbeta:
-            self.beta = beta_ss / np.sum(beta_ss, axis=1)[:, None]
-            self.beta[self.beta<0] = 1e-20
-            if np.any(self.beta == np.nan):
-                self.beta = np.nan_to_num(self.beta)
+            assert np.any(np.sum(beta_ss, axis=1) >= 0), 'break here'
+            row_sums = np.sum(beta_ss, axis=1)[:, None]
+            self.beta = np.nan_to_num(self.beta)
+            self.beta = np.divide(beta_ss,row_sums,out=np.zeros_like(beta_ss),where=row_sums!=0)
         else:
             self.mnreg(beta_ss=beta_ss)
 
@@ -581,42 +566,44 @@ class STM:
         self.beta = np.split(beta, 2, axis=0)
 
     def expectation_maximization(self, saving, output_dir=None):
-        t1 = time.process_time()
+        first_start_time = time.time()
+        logging.info(f"Fit STM for {self.K} topics")
+        logging.info("––––––––––––––––––––––––––––––––––––––––––––––––––––––––")
         for _iteration in range(100):
-            print(f"________________Iteration:{_iteration}_____________________")
+            logging.info(f"E-Step iteration {_iteration}")
             beta_ss, sigma_ss = self.E_step()
+            logging.info(f"M-Step iteration {_iteration}")
             self.M_step(beta_ss, sigma_ss)
             if self.EM_is_converged(_iteration):
-                self.time_processed = time.process_time() - t1
-                print(
+                self.time_processed = time.time() - first_start_time
+                logging.info(
                     f"model converged in iteration {_iteration} after {self.time_processed}s"
                 )
                 break
             if self.max_its_reached(_iteration):
-                self.time_processed = time.process_time() - t1
-                print(
+                self.time_processed = time.time() - first_start_time
+                logging.info(
                     f"maximum number of iterations ({self.max_em_its}) reached after {self.time_processed} seconds"
                 )
                 break
 
         if saving:
-            print("saving model...")
+            logging.info(f"saving model to {output_dir}")
             assert output_dir is not None
             self.save_model(output_dir)
 
     # _____________________________________________________________________
     def EM_is_converged(self, _iteration, convergence=None):
 
-        if _iteration < 2:
+        if _iteration < 1:
             return False
 
         new = self.bound
         old = self.last_bounds[-2]
-        emtol = self.convergence_threshold
 
         convergence_check = np.abs((new - old) / np.abs(old))
-        print(f"relative change: {convergence_check}")
-        if convergence_check < emtol:
+        logging.info(f"relative change: {convergence_check}")
+        if convergence_check < self.convergence_threshold:
             return True
         else:
             return False
@@ -657,9 +644,7 @@ class STM:
             # precomputation
             eta = np.insert(eta, self.K - 1, 0)
             Ndoc = int(np.sum(word_count))
-            # formula
-            # from cpp implementation:
-            # log(expeta * betas) * doc_cts - ndoc * log(sum(expeta))
+
             return np.float64(
                 (0.5 * (eta[:-1] - mu).T @ self.siginv @ (eta[:-1] - mu))
                 - (
@@ -732,7 +717,7 @@ class STM:
         hess = b @ b.T - np.sum(word_count) * np.multiply(
             theta[:, None], theta[None, :]
         )
-        assert self.check_symmetric(hess), "Hessian is not symmetric"
+        # assert self.check_symmetric(hess), "Hessian is not symmetric"
         # broadcasting, works fine
         # difference to the c++ implementation comes from unspecified evaluation order: (+) instead of (-)
         np.fill_diagonal(
@@ -743,13 +728,13 @@ class STM:
         f = d + self.siginv
 
         if not np.all(np.linalg.eigvals(f) > 0):
-            print("Hessian not positive definite. Introduce Diagonal Dominance...")
+            # print("Hessian not positive definite. Introduce Diagonal Dominance...")
             f = self.make_pd(f)
             if not np.all(np.linalg.eigvals(f) > 0):
                 np.fill_diagonal(f, np.diag(f) + 1e-5)
-                print(
-                    "Hessian not positive definite.  Adding a small prior 1e-5 for numerical stability."
-                )
+                # print(
+                #     "Hessian not positive definite.  Adding a small prior 1e-5 for numerical stability."
+                # )
 
         return f
 
@@ -769,12 +754,12 @@ class STM:
         except:
             try:
                 L = np.linalg.cholesky(self.make_pd(hess))
-                print("converts Hessian via diagonal-dominance")
+                # print("converts Hessian via diagonal-dominance")
             except:
                 L = sp.linalg.cholesky(
                     self.make_pd(hess) + 1e-5 * np.eye(hess.shape[0])
                 )
-                print("adds a small number to the hessian")
+                # print("adds a small number to the hessian")
         return L
 
     def optimize_nu(self, L):
@@ -809,10 +794,10 @@ class STM:
         """
         eta_ = np.insert(eta, self.K - 1, 0)
         theta = self.stable_softmax(eta_)
-        # compute 1/2 the determinant from the cholesky decomposition
+    
         detTerm = -np.sum(np.log(L.diagonal()))
         diff = eta - mu
-        ############## generate the bound and make it a scalar ##################
+
         beta_temp_kv = beta_doc_kv * np.exp(eta_)[:, None]
         bound = (
             np.log(
@@ -852,9 +837,6 @@ class STM:
         beta_output_path = os.path.join(output_dir, "beta_hat")
         np.save(beta_output_path, self.beta)
 
-        if self.model_type=='STM':
-            gamma_output_path = os.path.join(output_dir, "gamma_hat")
-            np.save(gamma_output_path, self.gamma)
 
         theta_output_path = os.path.join(output_dir, "theta_hat")
         np.save(theta_output_path, self.theta)
@@ -871,6 +853,10 @@ class STM:
         X_output_path = os.path.join(output_dir, "X")
         np.save(X_output_path, self.X)
 
+        if self.model =='STM':
+            gamma_output_path = os.path.join(output_dir, "gamma_hat")
+            np.save(gamma_output_path, self.gamma)
+        
         lower_bound_path = os.path.join(output_dir, "lower_bound.pickle")
 
         with open(lower_bound_path, "wb") as f:
@@ -916,7 +902,7 @@ class STM:
         out_prob = []
         out_frex = []
 
-        for k in range(K):
+        for k in K:
             probwords = [itemgetter(i)(vocab) for i in problabels[k, :n]]
             frexwords = [itemgetter(i)(vocab) for i in frexlabels[k, :n]]
             print(f"Topic {k}:\n \t Highest Prob: {probwords}")
@@ -924,7 +910,7 @@ class STM:
             out_prob.append(probwords)
             out_frex.append(frexwords)
 
-        return
+        return out_prob, out_frex
 
     def frex(self, w=0.5):
         """Calculate FREX (FRequency and EXclusivity) words
@@ -947,21 +933,3 @@ class STM:
     def ecdf(self, arr):
         """Calculate the ECDF values for all elements in a 1D array."""
         return sp.stats.rankdata(arr, method="max") / arr.size
-
-
-class NumpyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif isinstance(obj, np.integer):
-            return int(obj)
-        elif isinstance(obj, np.floating):
-            return float(obj)
-        elif isinstance(obj, np.floating):
-            return float(obj)
-        elif isinstance(obj, Series):
-            return obj.to_json()
-        return json.JSONEncoder.default(self, obj)
-
-
-# %%
