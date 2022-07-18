@@ -167,7 +167,7 @@ for K in list_of_k_values:
 
             np.save(metadata_path, Corpus.metadata)
 
-# %% Train and evaluate models________________________________________________________________________
+# %% Train models________________________________________________________________________
 
 
 kappa_interactions = False
@@ -266,7 +266,7 @@ for k_gamma_combination in os.listdir(corpus_artifact_path):
                 json.dump(stm_config, f)
             
 
-# %% Evaluation
+# %% Evaluate models
 
 # for each combination of K and Gamma: 
 # for each model in ["STM", "CTM"]
