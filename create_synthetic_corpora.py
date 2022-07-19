@@ -129,7 +129,7 @@ def create_synthetic_df(K):
 
 # topics
 t = list_of_k_values
-cores_to_use = 2
+cores_to_use = 9
 # split according to maximal cores_to_use
 t_split = chunkIt(t, float(len(t) / cores_to_use))
 

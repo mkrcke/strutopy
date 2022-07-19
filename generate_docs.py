@@ -292,12 +292,20 @@ class CorpusCreation:
         if self.dgp == "STM":
             self.p = self.theta @ self.beta
         self.documents = []
+        self.new_ids = {}
+        i = 0
         for doc in range(self.n_docs):
             doc_words = self.rng.multinomial(self.n_words, self.p[doc], size=1)
+            # create mapping to new ids
+            for x in np.asarray(doc_words).nonzero()[1]:
+                if x not in self.new_ids.keys():
+                    self.new_ids[x] = i
+                    i += 1
+            doc_ids_origin = np.asarray(doc_words).nonzero()[1]
             self.documents.append(
                 list(
                     zip(
-                        np.asarray(doc_words).nonzero()[1],
+                        [self.new_ids[j] for j in doc_ids_origin],
                         doc_words[np.where(doc_words > 0)],
                     )
                 )
