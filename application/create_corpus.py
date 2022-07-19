@@ -45,9 +45,9 @@ BoW_corpus = [dictionary.doc2bow(doc, allow_update=True) for doc in texts]
 
 
 # %% save objects
-corpora.MmCorpus.serialize("application/data/BoW_corpus.mm", BoW_corpus)
-dictionary.save("application/data/dictionary.mm")
-df.to_csv("application/data/corpus_preproc.csv")
+corpora.MmCorpus.serialize("../artifacts/wiki_data/BoW_corpus.mm", BoW_corpus)
+dictionary.save("../artifacts/wiki_data/dictionary.mm")
+df.to_csv("../artifacts/wiki_data/corpus_preproc.csv")
 
 # %% how to reload the objects
 corpora.dictionary.Dictionary.load("application/data/dictionary.mm")
