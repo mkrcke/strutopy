@@ -65,7 +65,7 @@ class STM:
                     - interactions: (bool) whether interactions between topics and covariates should be modelled (True) or not (False)
                     - betaindex: index for the topical prevalence covariate level (equals covar at the moment)
                     - last_bound: list to store approximated bound for each EM-iteration
-                initialised values for the the global
+                initialised values for the global
                     - V: number of tokens
                     - K: number of topics
                     - N: number of documents
@@ -352,7 +352,7 @@ class STM:
         logging.info(f"Completed M-Step in {elapsed_time} seconds. \n")
 
 
-    def update_mu(self, intercept=False):
+    def update_mu(self, intercept=True):
         """
         updates the mean parameter for the [document specific] logistic normal distribution.
         Changing estimation of prevalence covariate effects:
@@ -439,7 +439,9 @@ class STM:
         """
         # find the covariance
         covariance = (self.eta - self.mu).T @ (self.eta - self.mu)
+        covariance = np.array(covariance,dtype='float64')
         sigma = (covariance + nu) / self.N
+        sigma = np.array(sigma,dtype='float64')
         self.sigma = np.diag(np.diag(sigma)) * sigprior + (1 - sigprior) * sigma
 
     def update_beta(self, beta_ss):
@@ -862,7 +864,7 @@ class STM:
         with open(lower_bound_path, "wb") as f:
             pickle.dump(self.last_bounds, f)
 
-    def label_topics(self, n, topics, frexweight=0.5):
+    def label_topics(self, n, topics, frexweight=0.5, print_labels=False):
         """
         Label topics
 
@@ -905,13 +907,14 @@ class STM:
         for k in K:
             probwords = [itemgetter(i)(vocab) for i in problabels[k, :n]]
             frexwords = [itemgetter(i)(vocab) for i in frexlabels[k, :n]]
-            print(f"Topic {k}:\n \t Highest Prob: {probwords}")
-            print(f"Topic {k}:\n \t FREX: {frexwords}")
+            if print_labels: 
+                print(f"Topic {k}:\n \t Highest Prob: {probwords}")
+                print(f"Topic {k}:\n \t FREX: {frexwords}")
             out_prob.append(probwords)
             out_frex.append(frexwords)
 
         return out_prob, out_frex
-
+    
     def frex(self, w=0.5):
         """Calculate FREX (FRequency and EXclusivity) words
         A primarily internal function for calculating FREX words.
@@ -929,7 +932,39 @@ class STM:
         freq_ecdf = np.apply_along_axis(self.ecdf, 1, beta)
         out = 1.0 / (w / exclusivity_ecdf + (1 - w) / freq_ecdf)
         return out
+    
+    def find_thoughts(self, topics, threshold=0, n=3): 
+        """
+        Return the most prominent documents for a certain topic in order to identify representative 
+        documents. Topic representing documents might be conclusive underlying structure in the text
+        collection. 
+        Following Roberts et al. (2016b): 
+        Theta captures the modal estimate of the proportion of word
+        tokens assigned to the topic under the model.
 
+        @param: threshold (np.float) minimal theta value of the documents topic proportion
+            to be taken into account for the return statement. 
+        @param: topics to get the representative documents for
+        @return: the top n document indices ranked by the MAP estimate of the topic's theta value
+        
+        Example: Return the 10 most representative documents for the third topic: 
+        > data.iloc[model.find_thoughts(topics=[3], n=10)]
+        
+        """
+        assert n>1, 'Must request at least one returned document'
+        if n > self.N: 
+            n = self.N
+
+        for i in range(len(topics)):
+            k = topics[i]
+            #grab the values and the rank
+            index = np.argsort(-1 * self.theta[:,k])[1:n]
+            val = -np.sort(-1 * self.theta[:,k])[1:n]
+            #subset to those values which meet the threshold
+            index = index[np.where(val>=threshold)]
+            #grab the document(s) corresponding to topic k 
+            return index
+        
     def ecdf(self, arr):
         """Calculate the ECDF values for all elements in a 1D array."""
         return sp.stats.rankdata(arr, method="max") / arr.size

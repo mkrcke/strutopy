@@ -5,7 +5,7 @@ from qpsolvers import solve_qp
 from scipy.sparse import diags, csr_matrix, csr_array
 from sklearn.preprocessing import normalize
 
-def spectral_init(corpus, K, V, maxV=10000, verbose=True, print_anchor=False):
+def spectral_init(corpus, K, V, maxV=5000, verbose=True, print_anchor=False):
     """
     init='spectral' provides a deterministic initialization using the
     spectral algorithm given in Arora et al 2014.  See Roberts, Stewart and
@@ -224,14 +224,14 @@ def recover_l2(Q, anchor, wprob):
                 h=h,
                 verbose=True,
                 # lower/upper bound for probabilities
-                lb = np.zeros(M.shape[0]),
-                ub = np.ones(M.shape[0]),
+                #lb = np.zeros(M.shape[0]),
+                #ub = np.ones(M.shape[0]),
                 solver = 'quadprog'
                 )
             # replace small negative values with epsilon and store solution
-            if np.any(solution<0): 
-                solution[solution<0] = np.finfo(float).eps
-            condprob[i] = solution
+            # if np.any(solution<0): 
+            #     solution[solution<0] = np.finfo(float).eps
+            condprob[i] = -1*solution
     
     # p(z|w)
     weights = np.vstack(condprob)

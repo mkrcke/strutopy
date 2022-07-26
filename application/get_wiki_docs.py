@@ -172,4 +172,4 @@ corpus_with_metadata.drop_duplicates(inplace=True)
 
 # save file
 
-corpus_with_metadata.to_csv("application/data/wiki_corpus.csv")
+corpus_with_metadata.to_csv("artifacts/wiki_data/wiki_corpus.csv")

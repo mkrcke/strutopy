@@ -27,7 +27,7 @@ data = pd.read_csv(f"{ARTIFACTS_ROOT_DIR}/wiki_data/corpus_preproc.csv")
 corpus = corpora.MmCorpus(f"{ARTIFACTS_ROOT_DIR}/wiki_data/BoW_corpus.mm")
 dictionary = corpora.Dictionary.load(f"{ARTIFACTS_ROOT_DIR}/wiki_data/dictionary.mm")
 # specify metadata as topical prevalence covariates
-xmat = np.array(data.loc[:, ["statistics", "ml"]])
+xmat = np.array(data.loc[:, ["statistics"]])
 
 SEED = 12345  # random seed
 np.random.seed(SEED)
@@ -56,13 +56,13 @@ def fit_reference_model(K):
     )
 
     stm_config = {
-        "init_type": "spectral",
+        "init_type": "random",
         "model_type": "STM",
         "K": K,
         "convergence_threshold": convergence_threshold,
-        "lda_beta": True,
+        "lda_beta": lda_beta,
         "max_em_iter": max_em_iter,
-        "kappa_interactions": False,
+        "kappa_interactions": kappa_interactions,
         "sigma_prior": sigma_prior,
         "content": False,
         # dtype: np.float32,
@@ -91,16 +91,15 @@ def fit_reference_model(K):
 # %% parallization
 
 # topics
-t = [10, 20, 30, 40, 50, 60, 70, 80, 90]
-cores_to_use = 5
+# failed for k = 90
+t = [50,70]
+cores_to_use = 8
 # split according to maximal cores_to_use
 t_split = chunkIt(t, float(len(t) / cores_to_use))
 
 # %%
 
 for ll in range(len(t_split)):
-    Parallel(n_jobs=len(t_split[ll]), verbose=51)(
-        delayed(fit_reference_model)(K=k) for k in t_split[ll]
-    )
-
+    with Parallel(n_jobs=len(t_split[ll]), verbose=51) as parallel: 
+        parallel(delayed(fit_reference_model)(K=k) for k in t_split[ll])
 # %%

@@ -189,23 +189,19 @@ class CorpusCreation:
         if gamma is None:
             if mean is None:
                 mean = np.random.standard_normal(self.level)
-            sigma_prior = np.eye(self.level)
+            sigma_prior = np.diag(np.full(self.level,0.001))
             mean = np.random.multivariate_normal(mean, sigma_prior)
-            sigma = np.eye(self.level)
+            sigma= np.diag(np.full(self.level,0.001))
             self.gamma = np.random.multivariate_normal(mean, sigma, self.K - 1)
         else:
             self.gamma = gamma
 
-    def set_metadata(self, metadata, metadata_levels=[0, 1], p=None):
+    def set_metadata(self, metadata, metadata_levels=[0, 1]):
         if metadata is None:
             # simulate one-hot encoding x1==True iff x2==False
-            x1 = self.rng.choice(
-                metadata_levels, size=int(self.n_docs), replace=True, p=None
+            self.metadata = self.rng.choice(
+                metadata_levels, size=(int(self.n_docs),self.level), replace=True, p=None
             )
-            x2 = self.rng.choice(
-                metadata_levels, size=int(self.n_docs), replace=True, p=None
-            )
-            self.metadata = np.column_stack((x1, x2))
         else:
             assert metadata.shape == (
                 self.n_docs,
@@ -216,7 +212,7 @@ class CorpusCreation:
 
     def init_eta(self):
         mu = self.metadata @ self.gamma.T
-        sigma = np.eye(self.K - 1)
+        sigma = np.diag(np.full(self.K-1, 0.001))
         eta = []
         for d in range(self.n_docs):
             eta.append(np.random.multivariate_normal(mu[d], sigma))

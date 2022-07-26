@@ -9,16 +9,16 @@ from stm import STM
 
 
 # load corpus & dictionary
-data = pd.read_csv('application/data/corpus_preproc.csv')
-corpus = corpora.MmCorpus('application/data/BoW_corpus.mm')
-dictionary = corpora.Dictionary.load('application/data/dictionary.mm')
+data = pd.read_csv('artifacts/wiki_data/corpus_preproc.csv')
+corpus = corpora.MmCorpus('artifacts/wiki_data/BoW_corpus.mm')
+dictionary = corpora.Dictionary.load('artifacts/wiki_data/dictionary.mm')
 #%%
 #set configuration
-K=10
+K=20
 kappa_interactions = False
 lda_beta = True
 beta_index = None
-max_em_iter = 10
+max_em_iter = 30
 sigma_prior = 0
 convergence_threshold = 0.25
 # set topical prevalence 
@@ -40,7 +40,11 @@ model = STM(documents=corpus, dictionary=dictionary, X=xmat, **stm_config)
 model.expectation_maximization(saving=False)
 
 # %% investigate topics (highest probable words)
-model.label_topics(n=30, topics=10)
-#%% investigate covariate effect on topics
-model.gamma
+K = 10
+prob, frex = model.label_topics(n=20, topics=range(K))
+# investigate covariate effect on topics
+for topic in range(K-1): 
+    print(f"Statistics: {round(model.gamma[topic][0],4)} * {frex[topic]})")
+    print(f"ML:  {round(model.gamma[topic][1],4)} * {frex[topic]} \n")
+
 # %%

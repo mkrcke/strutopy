@@ -27,17 +27,17 @@ ARTIFACTS_ROOT_DIR = "artifacts"
 reference_model_path = f"{ARTIFACTS_ROOT_DIR}/reference_model"
 
 # specify list of K (topics)
-list_of_k_values = os.listdir(reference_model_path)
-list_of_k_values = list(map(int, list_of_k_values))
+# list_of_k_values = os.listdir(reference_model_path)
+# list_of_k_values = list(map(int, list_of_k_values))
 
 # specify global corpus settings
 DGP = "STM"  # use the data generating process defined for STM (Roberts et al. 2016b)
-TOTAL_N_CORPORA = 25  # in total, we want to create TOTAL_N_CORPORA for each setting
+TOTAL_N_CORPORA = 20  # in total, we want to create TOTAL_N_CORPORA for each setting
 N_WORDS = 150  # each document contains 200 words
 N_DOCS = 1500  # create 2000 documents per setting
-LEVEL = 2  # count of boolean covariates generated for each document
+LEVEL = 1  # count of boolean covariates generated for each document
 TRAIN_TEST_PROPORTION = 0.8  # use 80% as training, 20% for evaluation
-LIST_OF_GAMMA_FACTORS = [1, 2, 3, 4]  # four choices for the gamma factor
+LIST_OF_GAMMA_FACTORS = [1,5,10]  # four choices for the gamma factor
 ALPHA = "symmetric"  # dirichlet prior, only if DGP = 'LDA'
 TREATMENT = False  # no specific treatment effect
 SEED = 12345  # random seed
@@ -63,7 +63,7 @@ def create_synthetic_df(K):
         for n in range(TOTAL_N_CORPORA):
 
             # specify settings-specific output directory
-            output_dir = f"{ARTIFACTS_ROOT_DIR}/corpus/K_{K}_gamma_factor_{gamma_factor}/corpus_{n}"
+            output_dir = f"{ARTIFACTS_ROOT_DIR}/corpus/K_{K}_gamma_factor_{int(gamma_factor)}/corpus_{n}"
 
             # #check if file exists
             # if os.path.exists(output_dir):
@@ -103,7 +103,7 @@ def create_synthetic_df(K):
             test_2_docs_path = os.path.join(output_dir, "test_2_docs.pickle")
             logging.info(f"Saving metadata for corpus {n} to {output_dir}.")
             metadata_path = os.path.join(output_dir, "metadata")
-
+            theta_path = os.path.join(output_dir,"theta_true")
             with open(input_config_path, "w") as f:
                 json.dump(input_config, f)
 
@@ -123,19 +123,17 @@ def create_synthetic_df(K):
                 pickle.dump(Corpus.test_2_docs, f)
 
             np.save(metadata_path, Corpus.metadata)
+            np.save(theta_path, Corpus.theta)
 
 
 # %%
-
 # topics
-t = list_of_k_values
-cores_to_use = 9
+t = [10,30,50,70]
+cores_to_use = 8
 # split according to maximal cores_to_use
 t_split = chunkIt(t, float(len(t) / cores_to_use))
 
 # %%
-
 for ll in range(len(t_split)):
-    Parallel(n_jobs=len(t_split[ll]), verbose=51)(
-        delayed(create_synthetic_df)(K=k) for k in t_split[ll]
-    )
+    with Parallel(n_jobs=len(t_split[ll]), verbose=51) as parallel:
+        parallel(delayed(create_synthetic_df)(K=k) for k in t_split[ll])

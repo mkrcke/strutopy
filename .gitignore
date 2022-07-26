@@ -5,3 +5,4 @@ artifacts/wiki_data
 *.pyc
 *.png
 *.log
+archive/*

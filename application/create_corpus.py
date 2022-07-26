@@ -3,13 +3,16 @@
 
 from pydoc import doc
 import pandas as pd
+import numpy as np
 from gensim import corpora
 from gensim.parsing.preprocessing import STOPWORDS
 import re
 
 # %%
 
-df = pd.read_csv("application/data/corpus_raw.csv", index_col=0)
+df = pd.read_csv("application/data/wiki_corpus.csv", index_col=0)
+df = df.drop(df.index[np.where((df['statistics']==1) & (df['ml']==1))[0]])
+
 text_corpus = list(df["text"])
 
 
@@ -45,12 +48,12 @@ BoW_corpus = [dictionary.doc2bow(doc, allow_update=True) for doc in texts]
 
 
 # %% save objects
-corpora.MmCorpus.serialize("../artifacts/wiki_data/BoW_corpus.mm", BoW_corpus)
-dictionary.save("../artifacts/wiki_data/dictionary.mm")
-df.to_csv("../artifacts/wiki_data/corpus_preproc.csv")
+corpora.MmCorpus.serialize("artifacts/wiki_data/BoW_corpus.mm", BoW_corpus)
+dictionary.save("artifacts/wiki_data/dictionary.mm")
+df.to_csv("artifacts/wiki_data/corpus_preproc.csv")
 
-# %% how to reload the objects
-corpora.dictionary.Dictionary.load("application/data/dictionary.mm")
-corpora.MmCorpus("application/data/BoW_corpus.mm")
-pd.read_csv("application/data/corpus_preproc.csv")
-
+# # %% how to reload the objects
+# corpora.dictionary.Dictionary.load("artifacts/wiki_data/BoW_corpus.mm")
+# corpora.MmCorpus("artifacts/wiki_data/dictionary.mm")
+# pd.read_csv("artifacts/wiki_data/corpus_preproc.csv")
+# %%

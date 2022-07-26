@@ -1,0 +1,260 @@
+07/23/2022 12:20:21 PM adding document #0 to Dictionary(0 unique tokens: [])
+07/23/2022 12:20:21 PM built Dictionary(13314 unique tokens: ['0', '1', '2', '3', '4']...) from 1500 documents (total 225000 corpus positions)
+07/23/2022 12:20:21 PM adding document #0 to Dictionary(0 unique tokens: [])
+07/23/2022 12:20:21 PM built Dictionary(13314 unique tokens: ['0', '1', '2', '3', '4']...) from 1500 documents (total 202587 corpus positions)
+07/23/2022 12:22:16 PM Fit STM for 30 topics
+07/23/2022 12:22:16 PM ––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+07/23/2022 12:22:16 PM E-Step iteration 0
+07/23/2022 12:22:35 PM Lower Bound: -2883675.9690268356
+07/23/2022 12:22:35 PM Completed E-Step in 18.97 seconds. 
+
+07/23/2022 12:22:35 PM M-Step iteration 0
+07/23/2022 12:22:35 PM Completed M-Step in 0.007 seconds. 
+
+07/23/2022 12:22:35 PM E-Step iteration 1
+07/23/2022 12:22:52 PM Lower Bound: -1801972.7585383807
+07/23/2022 12:22:52 PM Completed E-Step in 17.313 seconds. 
+
+07/23/2022 12:22:52 PM M-Step iteration 1
+07/23/2022 12:22:52 PM Completed M-Step in 0.007 seconds. 
+
+07/23/2022 12:22:52 PM relative change: 0.37511260700123017
+07/23/2022 12:22:52 PM E-Step iteration 2
+07/23/2022 12:23:09 PM Lower Bound: -1797456.5644209012
+07/23/2022 12:23:09 PM Completed E-Step in 16.424 seconds. 
+
+07/23/2022 12:23:09 PM M-Step iteration 2
+07/23/2022 12:23:09 PM Completed M-Step in 0.005 seconds. 
+
+07/23/2022 12:23:09 PM relative change: 0.0025062499397286533
+07/23/2022 12:23:09 PM E-Step iteration 3
+07/23/2022 12:23:25 PM Lower Bound: -1794349.3129347872
+07/23/2022 12:23:25 PM Completed E-Step in 16.327 seconds. 
+
+07/23/2022 12:23:25 PM M-Step iteration 3
+07/23/2022 12:23:25 PM Completed M-Step in 0.007 seconds. 
+
+07/23/2022 12:23:25 PM relative change: 0.001728693503709269
+07/23/2022 12:23:25 PM E-Step iteration 4
+07/23/2022 12:23:42 PM Lower Bound: -1791062.6907074507
+07/23/2022 12:23:42 PM Completed E-Step in 17.269 seconds. 
+
+07/23/2022 12:23:42 PM M-Step iteration 4
+07/23/2022 12:23:42 PM Completed M-Step in 0.006 seconds. 
+
+07/23/2022 12:23:42 PM relative change: 0.0018316512864270593
+07/23/2022 12:23:42 PM E-Step iteration 5
+07/23/2022 12:23:59 PM Lower Bound: -1788490.8589193476
+07/23/2022 12:23:59 PM Completed E-Step in 16.385 seconds. 
+
+07/23/2022 12:23:59 PM M-Step iteration 5
+07/23/2022 12:23:59 PM Completed M-Step in 0.006 seconds. 
+
+07/23/2022 12:23:59 PM relative change: 0.0014359250524543336
+07/23/2022 12:23:59 PM E-Step iteration 6
+07/23/2022 12:24:14 PM Lower Bound: -1784959.2720358483
+07/23/2022 12:24:14 PM Completed E-Step in 15.773 seconds. 
+
+07/23/2022 12:24:14 PM M-Step iteration 6
+07/23/2022 12:24:14 PM Completed M-Step in 0.006 seconds. 
+
+07/23/2022 12:24:14 PM relative change: 0.00197461835820238
+07/23/2022 12:24:14 PM E-Step iteration 7
+07/23/2022 12:24:30 PM Lower Bound: -1781929.9708498197
+07/23/2022 12:24:30 PM Completed E-Step in 15.478 seconds. 
+
+07/23/2022 12:24:30 PM M-Step iteration 7
+07/23/2022 12:24:30 PM Completed M-Step in 0.006 seconds. 
+
+07/23/2022 12:24:30 PM relative change: 0.001697126222142617
+07/23/2022 12:24:30 PM E-Step iteration 8
+07/23/2022 12:24:46 PM Lower Bound: -1779446.7111513568
+07/23/2022 12:24:46 PM Completed E-Step in 15.603 seconds. 
+
+07/23/2022 12:24:46 PM M-Step iteration 8
+07/23/2022 12:24:46 PM Completed M-Step in 0.006 seconds. 
+
+07/23/2022 12:24:46 PM relative change: 0.0013935787259241252
+07/23/2022 12:24:46 PM E-Step iteration 9
+07/23/2022 12:25:02 PM Lower Bound: -1777245.9613663843
+07/23/2022 12:25:02 PM Completed E-Step in 16.305 seconds. 
+
+07/23/2022 12:25:02 PM M-Step iteration 9
+07/23/2022 12:25:02 PM Completed M-Step in 0.006 seconds. 
+
+07/23/2022 12:25:02 PM relative change: 0.0012367607139797774
+07/23/2022 12:25:02 PM maximum number of iterations (10) reached after 165.9263391494751 seconds
+07/23/2022 12:25:02 PM saving model to artifacts/corpus/K_30_gamma_factor_0/corpus_0
+07/23/2022 12:25:02 PM Fit STM for 30 topics
+07/23/2022 12:25:02 PM ––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+07/23/2022 12:25:02 PM E-Step iteration 0
+07/23/2022 12:25:20 PM Lower Bound: -2593797.998204563
+07/23/2022 12:25:20 PM Completed E-Step in 17.709 seconds. 
+
+07/23/2022 12:25:20 PM M-Step iteration 0
+07/23/2022 12:25:20 PM Completed M-Step in 0.005 seconds. 
+
+07/23/2022 12:25:20 PM E-Step iteration 1
+07/23/2022 12:25:35 PM Lower Bound: -1610475.9509854605
+07/23/2022 12:25:35 PM Completed E-Step in 15.816 seconds. 
+
+07/23/2022 12:25:35 PM M-Step iteration 1
+07/23/2022 12:25:35 PM Completed M-Step in 0.006 seconds. 
+
+07/23/2022 12:25:35 PM relative change: 0.3791050991248207
+07/23/2022 12:25:35 PM E-Step iteration 2
+07/23/2022 12:25:52 PM Lower Bound: -1602893.8139370885
+07/23/2022 12:25:52 PM Completed E-Step in 16.334 seconds. 
+
+07/23/2022 12:25:52 PM M-Step iteration 2
+07/23/2022 12:25:52 PM Completed M-Step in 0.006 seconds. 
+
+07/23/2022 12:25:52 PM relative change: 0.004708010103306733
+07/23/2022 12:25:52 PM E-Step iteration 3
+07/23/2022 12:26:07 PM Lower Bound: -1599762.6654737326
+07/23/2022 12:26:07 PM Completed E-Step in 15.545 seconds. 
+
+07/23/2022 12:26:07 PM M-Step iteration 3
+07/23/2022 12:26:07 PM Completed M-Step in 0.005 seconds. 
+
+07/23/2022 12:26:07 PM relative change: 0.001953434741672
+07/23/2022 12:26:07 PM E-Step iteration 4
+07/23/2022 12:26:23 PM Lower Bound: -1597537.898739961
+07/23/2022 12:26:23 PM Completed E-Step in 15.609 seconds. 
+
+07/23/2022 12:26:23 PM M-Step iteration 4
+07/23/2022 12:26:23 PM Completed M-Step in 0.006 seconds. 
+
+07/23/2022 12:26:23 PM relative change: 0.0013906854946591984
+07/23/2022 12:26:23 PM E-Step iteration 5
+07/23/2022 12:26:38 PM Lower Bound: -1595453.9715030992
+07/23/2022 12:26:38 PM Completed E-Step in 15.336 seconds. 
+
+07/23/2022 12:26:38 PM M-Step iteration 5
+07/23/2022 12:26:38 PM Completed M-Step in 0.005 seconds. 
+
+07/23/2022 12:26:38 PM relative change: 0.0013044618462607085
+07/23/2022 12:26:38 PM E-Step iteration 6
+07/23/2022 12:26:55 PM Lower Bound: -1593469.7769203004
+07/23/2022 12:26:55 PM Completed E-Step in 16.977 seconds. 
+
+07/23/2022 12:26:55 PM M-Step iteration 6
+07/23/2022 12:26:55 PM Completed M-Step in 0.005 seconds. 
+
+07/23/2022 12:26:55 PM relative change: 0.0012436551716558854
+07/23/2022 12:26:55 PM E-Step iteration 7
+07/23/2022 12:27:12 PM Lower Bound: -1591761.9921417455
+07/23/2022 12:27:12 PM Completed E-Step in 16.457 seconds. 
+
+07/23/2022 12:27:12 PM M-Step iteration 7
+07/23/2022 12:27:12 PM Completed M-Step in 0.005 seconds. 
+
+07/23/2022 12:27:12 PM relative change: 0.0010717396735666742
+07/23/2022 12:27:12 PM E-Step iteration 8
+07/23/2022 12:27:27 PM Lower Bound: -1590049.8794789077
+07/23/2022 12:27:27 PM Completed E-Step in 15.614 seconds. 
+
+07/23/2022 12:27:27 PM M-Step iteration 8
+07/23/2022 12:27:27 PM Completed M-Step in 0.009 seconds. 
+
+07/23/2022 12:27:27 PM relative change: 0.0010756084586076597
+07/23/2022 12:27:27 PM E-Step iteration 9
+07/23/2022 12:27:42 PM Lower Bound: -1588387.4861437427
+07/23/2022 12:27:42 PM Completed E-Step in 15.031 seconds. 
+
+07/23/2022 12:27:42 PM M-Step iteration 9
+07/23/2022 12:27:42 PM Completed M-Step in 0.006 seconds. 
+
+07/23/2022 12:27:42 PM relative change: 0.0010454976014398938
+07/23/2022 12:27:42 PM maximum number of iterations (10) reached after 160.49708890914917 seconds
+07/23/2022 12:27:42 PM saving model to artifacts/corpus/K_30_gamma_factor_0/corpus_0
+07/23/2022 12:27:43 PM adding document #0 to Dictionary(0 unique tokens: [])
+07/23/2022 12:27:43 PM built Dictionary(13314 unique tokens: ['0', '1', '2', '3', '4']...) from 1500 documents (total 225000 corpus positions)
+07/23/2022 12:27:43 PM adding document #0 to Dictionary(0 unique tokens: [])
+07/23/2022 12:27:43 PM built Dictionary(13314 unique tokens: ['0', '1', '2', '3', '4']...) from 1500 documents (total 202587 corpus positions)
+07/23/2022 12:29:12 PM Fit STM for 10 topics
+07/23/2022 12:29:12 PM ––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+07/23/2022 12:29:12 PM E-Step iteration 0
+07/23/2022 12:29:28 PM Lower Bound: -2630854.805304409
+07/23/2022 12:29:28 PM Completed E-Step in 16.408 seconds. 
+
+07/23/2022 12:29:28 PM M-Step iteration 0
+07/23/2022 12:29:28 PM Completed M-Step in 0.002 seconds. 
+
+07/23/2022 12:29:28 PM E-Step iteration 1
+07/23/2022 12:29:44 PM Lower Bound: -1826421.2685279527
+07/23/2022 12:29:44 PM Completed E-Step in 15.592 seconds. 
+
+07/23/2022 12:29:44 PM M-Step iteration 1
+07/23/2022 12:29:44 PM Completed M-Step in 0.002 seconds. 
+
+07/23/2022 12:29:44 PM relative change: 0.30576888361704074
+07/23/2022 12:29:44 PM E-Step iteration 2
+07/23/2022 12:29:59 PM Lower Bound: -1821703.7131391973
+07/23/2022 12:29:59 PM Completed E-Step in 15.284 seconds. 
+
+07/23/2022 12:29:59 PM M-Step iteration 2
+07/23/2022 12:29:59 PM Completed M-Step in 0.003 seconds. 
+
+07/23/2022 12:29:59 PM relative change: 0.0025829503138438716
+07/23/2022 12:29:59 PM E-Step iteration 3
+07/23/2022 12:30:15 PM Lower Bound: -1818266.521472943
+07/23/2022 12:30:15 PM Completed E-Step in 15.235 seconds. 
+
+07/23/2022 12:30:15 PM M-Step iteration 3
+07/23/2022 12:30:15 PM Completed M-Step in 0.002 seconds. 
+
+07/23/2022 12:30:15 PM relative change: 0.0018868006039968314
+07/23/2022 12:30:15 PM E-Step iteration 4
+07/23/2022 12:30:30 PM Lower Bound: -1815424.4479058795
+07/23/2022 12:30:30 PM Completed E-Step in 15.547 seconds. 
+
+07/23/2022 12:30:30 PM M-Step iteration 4
+07/23/2022 12:30:30 PM Completed M-Step in 0.002 seconds. 
+
+07/23/2022 12:30:30 PM relative change: 0.0015630676435494386
+07/23/2022 12:30:30 PM E-Step iteration 5
+07/23/2022 12:30:46 PM Lower Bound: -1813311.7431066022
+07/23/2022 12:30:46 PM Completed E-Step in 15.901 seconds. 
+
+07/23/2022 12:30:46 PM M-Step iteration 5
+07/23/2022 12:30:46 PM Completed M-Step in 0.003 seconds. 
+
+07/23/2022 12:30:46 PM relative change: 0.0011637525327557862
+07/23/2022 12:30:46 PM E-Step iteration 6
+07/23/2022 12:31:02 PM Lower Bound: -1811561.7524394207
+07/23/2022 12:31:02 PM Completed E-Step in 15.696 seconds. 
+
+07/23/2022 12:31:02 PM M-Step iteration 6
+07/23/2022 12:31:02 PM Completed M-Step in 0.003 seconds. 
+
+07/23/2022 12:31:02 PM relative change: 0.0009650798732397971
+07/23/2022 12:31:02 PM E-Step iteration 7
+07/23/2022 12:31:17 PM Lower Bound: -1810066.7061664034
+07/23/2022 12:31:17 PM Completed E-Step in 15.613 seconds. 
+
+07/23/2022 12:31:17 PM M-Step iteration 7
+07/23/2022 12:31:17 PM Completed M-Step in 0.002 seconds. 
+
+07/23/2022 12:31:17 PM relative change: 0.0008252803256660152
+07/23/2022 12:31:17 PM E-Step iteration 8
+07/23/2022 12:31:33 PM Lower Bound: -1808804.0322345719
+07/23/2022 12:31:33 PM Completed E-Step in 15.492 seconds. 
+
+07/23/2022 12:31:33 PM M-Step iteration 8
+07/23/2022 12:31:33 PM Completed M-Step in 0.003 seconds. 
+
+07/23/2022 12:31:33 PM relative change: 0.0006975841981568461
+07/23/2022 12:31:33 PM E-Step iteration 9
+07/23/2022 12:31:49 PM Lower Bound: -1807760.0597880802
+07/23/2022 12:31:49 PM Completed E-Step in 16.007 seconds. 
+
+07/23/2022 12:31:49 PM M-Step iteration 9
+07/23/2022 12:31:49 PM Completed M-Step in 0.002 seconds. 
+
+07/23/2022 12:31:49 PM relative change: 0.0005771617200576448
+07/23/2022 12:31:49 PM maximum number of iterations (10) reached after 156.80522322654724 seconds
+07/23/2022 12:31:49 PM saving model to artifacts/corpus/K_30_gamma_factor_0/corpus_0
+07/23/2022 12:31:49 PM Fit STM for 10 topics
+07/23/2022 12:31:49 PM ––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+07/23/2022 12:31:49 PM E-Step iteration 0
