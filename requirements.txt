@@ -5,3 +5,4 @@ joblib
 sklearn
 qpsolvers
 matplotlib
+wordcloud
