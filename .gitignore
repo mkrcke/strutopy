@@ -1,0 +1,6 @@
+.DS_Store
+src/artifacts/*
+*.pyc
+*.png
+*.log
+archive/*

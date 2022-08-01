@@ -1,0 +1,8 @@
+pandas
+wikipedia
+gensim
+joblib
+sklearn
+qpsolvers
+matplotlib
+wordcloud

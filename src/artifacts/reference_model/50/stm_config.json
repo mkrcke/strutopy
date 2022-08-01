@@ -1,0 +1,1 @@
+{"init_type": "random", "model_type": "STM", "K": 50, "convergence_threshold": 1e-05, "lda_beta": true, "max_em_iter": 25, "kappa_interactions": false, "sigma_prior": 0, "content": false, "length_dictionary": 13852, "number_of_docs": 1015}
