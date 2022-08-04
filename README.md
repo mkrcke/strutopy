@@ -2,7 +2,7 @@
 
 The implementation in Python aims for computational efficiency as well as ease-of-use.
 
-Structural Topic Model (Roberts et al. 2016) can be used to extend the classical topic modelling approaches by including text metadata on a document level. 
+Structural Topic Model (Roberts et al. 2016) can be used to extend the former topic modelling approaches by including text metadata on a document level. 
 The meta information can be introduced to the estimation procedure two-fold, via: 
 1. topical content covariates that shape the word usage within topics
 2. topical prevalence covariates that shape the frequency of topic occurences.
