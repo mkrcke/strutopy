@@ -10,7 +10,7 @@ The meta information can be introduced to the estimation procedure two-fold, via
 ## Contribution of this thesis: 
 The contribution of this thesis is twofold: 
 1. A complete implementation of the STM model and estimation procedure is provided. The main module is contained in src/modules/stm.py
-2. A comprehensive comparison between STM and its direct predecessor CTM is conducted. 
+2. A comprehensive comparison between STM and its direct predecessor CTM is conducted using the implementation provided hereby. 
 
 ## Setup
 In order to reproduce and use the code of the repository, the following steps are recommended:
