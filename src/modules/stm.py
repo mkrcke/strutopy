@@ -216,7 +216,7 @@ def fastAnchor(Q, K, verbose=True):
         project[
             np.intp(basis),
         ] = 0
-        Q = Q.A - project
+        Q = Q.toarray() - project if sp.sparse.issparse(Q) else Q - project
 
         # Q is not sparse anymore...
         row_squared_sum = np.sum(np.power(Q, 2), axis=0)
@@ -1183,8 +1183,8 @@ class STM:
 
         # Sort by word probabilities on each row of beta
         # Returns words with highest probability per topic
-        problabels = np.argsort(-1 * self.beta)[:n]
-        frexlabels = np.argsort(-1 * frex)[:n]
+        problabels = np.argsort(-1 * self.beta)[:, :n]
+        frexlabels = np.argsort(-1 * frex)[:, :n]
 
         out_prob = []
         out_frex = []
