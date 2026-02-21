@@ -4,3 +4,4 @@ src/artifacts/*
 *.png
 *.log
 archive/*
+.venv/

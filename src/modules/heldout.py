@@ -37,25 +37,34 @@ from .stm import STM
 
 
 #%%
-def split_corpus(corpus, proportion=0.8):
+def split_corpus(corpus, validation_set=False, document_completion=True, proportion=0.8):
+        
+        test_split_idx = int(proportion * len(corpus))
+        
+        if not type(corpus)==list:
+            try: 
+                train = [doc for doc in corpus[:test_split_idx]]
+                test = [doc for doc in corpus[test_split_idx:validate_split_idx]]
+                validate = [doc for doc in corpus[validate_split_idx:]]
+            except:
+                corpus = [doc for doc in corpus] 
+                train_docs = corpus[:test_split_idx]
+                test_docs = corpus[test_split_idx:]
 
-    test_split_idx = int(proportion * len(corpus))
-    validate_split_idx = int((proportion + (1 - proportion) / 2) * len(corpus))
-    if not type(corpus) == list:
-        try:
-            train = [doc for doc in corpus[:test_split_idx]]
-            test = [doc for doc in corpus[test_split_idx:validate_split_idx]]
-            validate = [doc for doc in corpus[validate_split_idx:]]
-        except:
-            train = [doc for doc in utils.ClippedCorpus(corpus, int(0.8 * len(corpus)))]
-            # test & validate are missing here!!!
-            # currently working on this
-    else:
-        train = np.array(corpus[:test_split_idx])
-        test = np.array(corpus[test_split_idx:validate_split_idx])
-        validate = np.array(corpus[validate_split_idx:])
+        if validation_set:
+            validate_split_idx = int(
+                (proportion + (1 - proportion) / 2) * len(corpus)
+            )
+            test_docs = corpus[test_split_idx:validate_split_idx]
+            validate_docs = corpus[validate_split_idx:]
 
-    return train, test, validate
+        else:
+            test_docs = corpus[test_split_idx:]
+
+        if document_completion:
+            test_1_docs, test_2_docs = cut_in_half(test_docs)
+        
+        return train_docs, test_1_docs, test_2_docs, validate_docs
 
 
 def cut_in_half(doc_set):
@@ -66,7 +75,7 @@ def cut_in_half(doc_set):
     @return: first_half returns the set with every other word removed (starting at index 0)
     @return: second_half returns the set with every other word removed (starting at index 1)
     """
-    first_half = np.empty(len(doc_set), dtype=np.ndarray)
+    first_half = np.zeros(len(doc_set), dtype=np.ndarray)
     second_half = np.zeros(len(doc_set), dtype=np.ndarray)
 
     for doc in range(len(doc_set)):
@@ -102,14 +111,14 @@ def train_models(beta_train_corpus, theta_train_corpus, K, model, settings):
         dictionary=model_beta_dictionary,
         settings=settings,
         model=model,
-        init="random",
+        init="spectral",
     )
     model_theta = STM(
         documents=theta_train_corpus,
         dictionary=model_theta_dictionary,
         settings=settings,
         model=model,
-        init="random",
+        init="spectral",
     )
     # take beta from model trained on train + test set
     model_beta.expectation_maximization(saving=False)
@@ -119,11 +128,11 @@ def train_models(beta_train_corpus, theta_train_corpus, K, model, settings):
     return np.array(model_beta.beta), np.array(model_theta.theta)
 
 
-def heldout(corpus, K, model, settings):
+def heldout_on_test(corpus, K, model, settings):
 
     train, test, validate = split_corpus(corpus, proportion=0.8)
     test_1, test_2 = cut_in_half(test)
-    # validate_1, validate_2 = cut_in_half(validate)
+    validate_1, validate_2 = cut_in_half(validate)
 
     beta_train_corpus = np.concatenate((train, test))
     theta_train_corpus = np.concatenate((train, test_1))
@@ -141,114 +150,7 @@ def find_k(K_candidates, models, corpus, settings):
     results = [[]] * len(models)
     for i, model in enumerate(models):
         for j, K in enumerate(K_candidates):
-            _, expected_ll = heldout(corpus=corpus, K=K, model=model, settings=settings)
+            _, expected_ll = heldout_on_test(corpus=corpus, K=K, model=model, settings=settings)
             results[i].append(expected_ll)
 
     return results
-
-
-#%%
-# Corpus = CorpusCreation(
-#     n_topics=10,
-#     n_docs=500,
-#     n_words=150,
-#     V=500,
-#     treatment=False,
-#     alpha='symmetric',
-#     p=2,
-#     #alpha_treatment='auto-linear',
-# )
-# Corpus.generate_documents()
-
-# # Set starting values and parameters
-# # Parameter Settings (required for simulation process)
-# num_topics = 10
-# A = 2
-# verbose = True
-# interactions = False  # settings.kappa
-# betaindex = np.concatenate(
-#     [np.repeat(0, len(Corpus.documents) / 2), np.repeat(1, len(Corpus.documents) / 2)]
-# )
-
-# # Initialization and Convergence Settings
-# ngroups = 1  # settings.ngroups
-# max_em_its = 5  # settings.convergence
-# emtol = 1e-5  # settings.convergence
-
-
-# settings = {
-#     "dim": {
-#         "K": num_topics,  # number of topics
-#         "V": len(Corpus.dictionary),  # number of words
-#         "A": A,  # dimension of topical content
-#         "N": len(Corpus.documents),
-#     },
-#     "verbose": verbose,
-#     "kappa": {
-#         "interactions": interactions,
-#         "fixedintercept": True,
-#         "contrats": False,
-#         "mstep": {"tol": 0.01, "maxit": 5},
-#     },
-#     "tau": {
-#         "mode": np.nan,
-#         "tol": 1e-5,
-#         "enet": 1,
-#         "nlambda": 250,
-#         "lambda.min.ratio": 0.001,
-#         "ic.k": 2,
-#         "maxit": 1e4,
-#     },
-#     "init": {
-#         "nits": 20,
-#         "burnin": 25,
-#         "alpha": 50 / num_topics,
-#         "eta": 0.01,
-#         "s": 0.05,
-#         "p": 3000,
-#     },
-#     "convergence": {
-#         "max.em.its": max_em_its,
-#         "em.converge.thresh": emtol,
-#         "allow.neg.change": True,
-#     },
-#     "covariates": {
-#         "X": betaindex,
-#         "betaindex": betaindex,
-#         # 'yvarlevels':yvarlevels,
-#         # 'formula': prevalence,
-#     },
-#     "gamma": {
-#         "mode": "L1",  # needs to be set for the m-step (update mu in the topical prevalence model)
-#         "prior": np.nan,  # sigma in the topical prevalence model
-#         "enet": 1,  # regularization term
-#         "ic.k": 2,  # information criterion
-#         "maxits": 1000,
-#     },
-#     "sigma": {
-#         "prior": 0,
-#         "ngroups": ngroups,
-#     },
-# }
-
-
-# %%
-
-# corpus = Corpus.documents
-# K_candidates = np.array([5,10])
-# results_k = find_k(models = ['STM', 'CTM'], K_candidates, corpus, settings)
-
-# # %% plot
-# fig, ax = plt.subplots()
-
-# ax.scatter(K_candidates, results_k[1], label='STM')
-# ax.scatter(K_candidates, results_k[0], label='CTM')
-
-
-# plt.title("Held-out Likelihood for varying number of topics")
-# plt.xlabel("Number of topics")
-# plt.ylabel("Held-out Likelihood")
-# plt.legend()
-# #plt.savefig('img/different_k_no_treatment', bbox_inches='tight', dpi=360)
-# plt.show()
-# %%

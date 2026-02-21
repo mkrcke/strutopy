@@ -69,7 +69,7 @@ def spectral_init(corpus, K, V, maxV=5000, verbose=True, print_anchor=False):
     if print_anchor:
         for i, idx in enumerate(anchor):
             print(
-                f"{i}. anchor word: {vectorizer.get_feature_names_out()[np.int0(idx)]}"
+                f"{i}. anchor word: {vectorizer.get_feature_names_out()[np.intp(idx)]}"
             )
     if verbose:
         print("Recover values for beta")
@@ -214,13 +214,13 @@ def fastAnchor(Q, K, verbose=True):
         # first we should zero out the components for the basis
         # vectors which we weren't intended to calculate
         project[
-            np.int0(basis),
+            np.intp(basis),
         ] = 0
         Q = Q.A - project
 
         # Q is not sparse anymore...
         row_squared_sum = np.sum(np.power(Q, 2), axis=0)
-        row_squared_sum[:, np.int0(basis)] = 0
+        row_squared_sum[:, np.intp(basis)] = 0
         if verbose:
             print(".", end="", flush=True)
     return basis
@@ -243,7 +243,7 @@ def recover_l2(Q, anchor, wprob):
     """
     # Prepare Quadratic Programming
     M = Q[
-        np.int0(anchor),
+        np.intp(anchor),
     ]
     P = np.array(np.dot(M, M.T).todense())  # square matrix
 
@@ -316,10 +316,10 @@ class STM:
         K,
         X,
         kappa_interactions,
-        lda_beta,
         max_em_iter,
         sigma_prior,
         convergence_threshold,
+        lda_beta=True,
         beta_index=None,
         A=None,
         dtype=np.float32,
@@ -582,10 +582,10 @@ class STM:
             sigma_ss += nu
             # TODO: combine into one
             if self.interactions:
-                beta_ss[aspect][:, np.array(np.int0(idx_1v))] += self.phi
+                beta_ss[aspect][:, np.array(np.intp(idx_1v))] += self.phi
             else:
                 try:
-                    beta_ss[:, np.array(np.int0(idx_1v))] += self.phi
+                    beta_ss[:, np.array(np.intp(idx_1v))] += self.phi
                 except RuntimeWarning:
                     breakpoint()
 
@@ -612,9 +612,9 @@ class STM:
         # if not np.all((self.beta >= 0)):
         # raise ValueError("Some entries of beta are negative.")
         if self.interactions:
-            beta_doc_kv = self.beta[aspect][:, np.array(np.int0(words))]
+            beta_doc_kv = self.beta[aspect][:, np.array(np.intp(words))]
         else:
-            beta_doc_kv = self.beta[:, np.array(np.int0(words))]
+            beta_doc_kv = self.beta[:, np.array(np.intp(words))]
         # add small value to beta for numerical stability
         # beta_doc_kv += 1e-10
         return beta_doc_kv
@@ -710,19 +710,21 @@ class STM:
                 'Updating the topical prevalence parameter requires a mode. Choose from "CTM", "Pooled" or "L1" (default).'
             )
 
-    def update_sigma(self, nu, sigprior):
+    def update_sigma(self, nu, sigprior=0):
         """
         Updates the variance covariance matrix for the logistic normal distribution of topical prevalence
 
-        Args:
-            nu (_type_): variance-covariance for the variational document-topic distribution
-            sigprior (_type_): prior for the var-cov. matrix for the log-normal
+        
+        @param: nu (_type_) variance-covariance for the variational document-topic distribution
+        @param: sigprior (float): weight for the MLE of the var-cov. matrix for the log-normal, defaults to 0
         """
+        assert 0 <= sigprior <= 1, 'weight needs to be defined between 0 and 1'
         # find the covariance
         covariance = (self.eta - self.mu).T @ (self.eta - self.mu)
         covariance = np.array(covariance, dtype="float64")
         sigma = (covariance + nu) / self.N
         sigma = np.array(sigma, dtype="float64")
+        
         self.sigma = np.diag(np.diag(sigma)) * sigprior + (1 - sigprior) * sigma
 
     def update_beta(self, beta_ss):
@@ -745,7 +747,7 @@ class STM:
             self.mnreg(beta_ss=beta_ss)
 
     def mnreg(self, beta_ss):
-        """estimation of distributed poisson regression for the update of the kappa parameters
+        """estimation of distributed poisson regression for the updating kappa and beta accordingly.
 
         @param: beta_ss (np.ndarray) estimated word-topic distribution of the current EM-iteration with dimension K x V
         """
@@ -816,9 +818,9 @@ class STM:
             # alpha = alpha * np.floor(0.2*alpha)
             clf = sklearn.linear_model.PoissonRegressor(
                 fit_intercept=fit_intercept,
-                max_iter=np.int0(maxit),
+                max_iter=np.intp(maxit),
                 tol=tol,
-                alpha=np.int0(alpha),
+                alpha=np.intp(alpha),
             )
             mod = clf.fit(covar, counts[:, [1]].A.flatten())
             # if it didn't converge, increase nlambda paths by 20%
@@ -1146,7 +1148,7 @@ class STM:
         with open(lower_bound_path, "wb") as f:
             pickle.dump(self.last_bounds, f)
 
-    def label_topics(self, n, topics, frexweight=0.5, print_labels=False):
+    def label_topics(self, topics, n, frexweight=0.5, print_labels=False):
         """
         Label topics
 
@@ -1157,11 +1159,12 @@ class STM:
         FREX: weights exclusivity and frequency scores to get more meaningful topic labels.
         (Bischof and Airoldi 2012 for more details.)
 
-        @param model STM model object.
         @param topics number of topics to include.  Default
         is all topics.
         @param n The desired number of words (per type) used to label each topic.
         Must be 1 or greater.
+        @param frexweight to control for exclusivity vs. frequency, defaults to 0.5
+        @param print_labels whether labels are returned or not, defaults to False
 
         TODO: @return labelTopics object (list) \item{prob }{matrix of highest
         probability words}

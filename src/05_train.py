@@ -39,8 +39,6 @@ convergence_threshold = 1e-5
 corpus_artifact_path = f"{ARTIFACTS_ROOT_DIR}/corpus"
 
 # %%
-
-
 def train_on_synthetic_data(input):
 
     K = int(input[1].split("_")[1])
