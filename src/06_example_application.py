@@ -171,23 +171,10 @@ test_docs = corpus[test_split_idx:]
 test_1_docs, test_2_docs = cut_in_half(test_docs)
 
 # Prepare corpora for model training
-# beta_train_corpus = np.concatenate(
-#     [
-#         train_docs,
-#         test_docs,
-#     ],
-#     dtype=object,
-#     axis=0,
-# )
+# Workaround for np.concatenate ValueError with ragged arrays (see issue #14)
 beta_train_corpus_list = list(train_docs) + list(test_docs)
 beta_train_corpus = np.array(beta_train_corpus_list, dtype=object)
 
-# theta_train_corpus = np.concatenate(
-#     [
-#         train_docs,
-#         test_1_docs,
-#     ]
-# )
 theta_train_corpus_list = list(train_docs) + list(test_1_docs)
 theta_train_corpus = np.array(theta_train_corpus_list, dtype=object)
 
@@ -291,19 +278,14 @@ wiki_model = STM(
 wiki_model.expectation_maximization(saving=False)
 # %% investigate advantage of spectral decomposition
 
-lb_spectral = np.load(
-    "artifacts/wiki_data/final_model/lower_bound.pickle", allow_pickle=True
-)
-lb_random = (
-    wiki_model.last_bounds
-)  # here wiki_model was estimated with "init_type": "random"
-
+if not hasattr(wiki_model, "last_bounds") or not wiki_model.last_bounds:
+    raise RuntimeError(
+        "wiki_model.last_bounds is empty. Run wiki_model.expectation_maximization() first."
+    )
+lb_random = wiki_model.last_bounds
 
 plt.plot(lb_random, label="random initialisation")
-plt.plot(lb_spectral, label="spectral initialisation")
 plt.legend()
-
-# plt.savefig("../img/spectral_initialisation", dpi=360, bbox_inches="tight")
 
 # %% investigate topics (highest probable words)
 K = 20

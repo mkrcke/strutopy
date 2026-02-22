@@ -1240,15 +1240,19 @@ class STM:
         if n > self.N:
             n = self.N
 
+        results = []
         for i in range(len(topics)):
             k = topics[i]
             # grab the values and the rank
-            index = np.argsort(-1 * self.theta[:, k])[1:n]
-            val = -np.sort(-1 * self.theta[:, k])[1:n]
+            index = np.argsort(-1 * self.theta[:, k])[:n]
+            val = -np.sort(-1 * self.theta[:, k])[:n]
             # subset to those values which meet the threshold
             index = index[np.where(val >= threshold)]
-            # grab the document(s) corresponding to topic k
-            return index
+            results.append(index)
+        # return flat array for single topic, list of arrays for multiple
+        if len(results) == 1:
+            return results[0]
+        return results
 
     def ecdf(self, arr):
         """Calculate the ECDF values for all elements in a 1D array."""
