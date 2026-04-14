@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-timeout>=2.2"]
+dev = ["pytest>=9.0.3", "pytest-timeout>=2.2"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
